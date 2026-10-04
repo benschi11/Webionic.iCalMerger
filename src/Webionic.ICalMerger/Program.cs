@@ -78,6 +78,16 @@ await AdminBootstrapper.EnsureAdminAsync(app.Services, app.Configuration);
 
 app.UseForwardedHeaders();
 
+// Reset-Links tragen ?code= in der URL, daher kein Referer an Dritte; die App wird nie in Frames eingebettet.
+app.Use((context, next) =>
+{
+    var headers = context.Response.Headers;
+    headers["X-Content-Type-Options"] = "nosniff";
+    headers["X-Frame-Options"] = "DENY";
+    headers["Referrer-Policy"] = "same-origin";
+    return next();
+});
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);

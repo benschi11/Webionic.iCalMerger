@@ -21,4 +21,15 @@ public sealed class PipelineTests : IDisposable
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         Assert.StartsWith("https://kalender.example.org/Account/Login", response.Headers.Location!.ToString());
     }
+
+    [Fact]
+    public async Task LoginPage_CarriesSecurityHeaders()
+    {
+        var response = await _factory.NewClient().GetAsync("/Account/Login");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("nosniff", response.Headers.GetValues("X-Content-Type-Options").Single());
+        Assert.Equal("DENY", response.Headers.GetValues("X-Frame-Options").Single());
+        Assert.Equal("same-origin", response.Headers.GetValues("Referrer-Policy").Single());
+    }
 }
