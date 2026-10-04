@@ -233,6 +233,21 @@ public class SourceCacheTests
     }
 
     [Fact]
+    public async Task Get_FailureAfterTwelveHours_StillServesStaleContent()
+    {
+        _fetcher.Set(Url, Calendar(Event("a@x")));
+        await _cache.GetAsync(Url, default);
+
+        _time.Advance(TimeSpan.FromHours(12));
+        _fetcher.Fail(Url);
+        var result = await _cache.GetAsync(Url, default);
+
+        Assert.Contains("a@x", result.Ics);
+        Assert.True(result.Stale);
+        Assert.NotNull(result.Error);
+    }
+
+    [Fact]
     public async Task Evicts_EntriesIdleLongerThanWindow()
     {
         const string other = "https://example.com/b.ics";
@@ -241,7 +256,7 @@ public class SourceCacheTests
         await _cache.GetAsync(Url, default);
         Assert.Equal(1, _cache.EntryCount);
 
-        _time.Advance(TimeSpan.FromMinutes(61));
+        _time.Advance(TimeSpan.FromDays(7) + TimeSpan.FromMinutes(1));
         await _cache.GetAsync(other, default);
 
         Assert.Equal(1, _cache.EntryCount);
@@ -257,9 +272,9 @@ public class SourceCacheTests
         _fetcher.Set(other, Calendar(Event("b@x")));
         await _cache.GetAsync(Url, default);
 
-        _time.Advance(TimeSpan.FromMinutes(40));
+        _time.Advance(TimeSpan.FromDays(4));
         await _cache.GetAsync(Url, default);
-        _time.Advance(TimeSpan.FromMinutes(40));
+        _time.Advance(TimeSpan.FromDays(4));
         await _cache.GetAsync(other, default);
 
         Assert.Equal(2, _cache.EntryCount);
@@ -279,7 +294,7 @@ public class SourceCacheTests
         var pending = _cache.GetAsync(Url, default);
         await Task.Delay(50);
 
-        _time.Advance(TimeSpan.FromHours(2));
+        _time.Advance(TimeSpan.FromDays(8));
         await _cache.GetAsync(other, default);
 
         Assert.Equal(2, _cache.EntryCount);

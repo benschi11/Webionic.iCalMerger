@@ -20,7 +20,7 @@ public interface ISourceCache
 public sealed record SourceCacheOptions(TimeSpan Ttl, TimeSpan FailureBackoff)
 {
     /// <summary>Einträge, auf die so lange niemand zugegriffen hat, werden verworfen.</summary>
-    public TimeSpan IdleEviction { get; init; } = TimeSpan.FromHours(1);
+    public TimeSpan IdleEviction { get; init; } = TimeSpan.FromDays(7);
 
     public static SourceCacheOptions Default { get; } = new(TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(1));
 }
