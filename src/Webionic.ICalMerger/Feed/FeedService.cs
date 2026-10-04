@@ -8,7 +8,7 @@ namespace Webionic.ICalMerger.Feed;
 /// <param name="Ics">Fertiger Kalender. Null, wenn alle Quellen ausgefallen sind und kein Cache existiert.</param>
 public sealed record FeedResult(string? Ics, int FailedSources);
 
-public sealed class FeedService(IDbContextFactory<ApplicationDbContext> dbFactory, ISourceCache cache, TimeProvider time, ILogger<FeedService>? logger = null)
+public sealed class FeedService(IDbContextFactory<ApplicationDbContext> dbFactory, ISourceCache cache, ILogger<FeedService>? logger = null)
 {
     /// <returns>Null, wenn das Token unbekannt ist.</returns>
     public async Task<FeedResult?> BuildAsync(string token, CancellationToken ct)

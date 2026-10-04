@@ -28,7 +28,7 @@ public sealed class FeedServiceTests : IDisposable
         _fetcher.Set(UrlA, Calendar(Event("a@x", "Von A")));
         _fetcher.Set(UrlB, Calendar(Event("b@x", "Von B")));
         _calendars = new CalendarService(_db, _fetcher, Options.Create(new AppLimits()));
-        _feed = new FeedService(_db, new SourceCache(_fetcher, _time), _time);
+        _feed = new FeedService(_db, new SourceCache(_fetcher, _time));
     }
 
     public void Dispose() => _db.Dispose();
@@ -170,7 +170,7 @@ public sealed class FeedServiceTests : IDisposable
     public async Task Build_StatusPersistenceFailure_StillReturnsFeed()
     {
         var calendar = await CalendarWithSourcesAsync(UrlA);
-        var feed = new FeedService(new FailingOnSaveFactory(_db), new SourceCache(_fetcher, _time), _time);
+        var feed = new FeedService(new FailingOnSaveFactory(_db), new SourceCache(_fetcher, _time));
 
         var result = await feed.BuildAsync(calendar.Token, default);
 
@@ -182,7 +182,7 @@ public sealed class FeedServiceTests : IDisposable
     {
         var calendar = await CalendarWithSourcesAsync(UrlA, UrlB);
         var writes = new CountingSaves();
-        var feed = new FeedService(new InterceptingFactory(_db, writes), new SourceCache(_fetcher, _time), _time);
+        var feed = new FeedService(new InterceptingFactory(_db, writes), new SourceCache(_fetcher, _time));
         await feed.BuildAsync(calendar.Token, default);
         Assert.Equal(1, writes.Count);
         var before = (await _calendars.GetAsync(_owner, calendar.Id))!.Sources;
@@ -201,7 +201,7 @@ public sealed class FeedServiceTests : IDisposable
     {
         var calendar = await CalendarWithSourcesAsync(UrlA);
         var writes = new CountingSaves();
-        var feed = new FeedService(new InterceptingFactory(_db, writes), new SourceCache(_fetcher, _time), _time);
+        var feed = new FeedService(new InterceptingFactory(_db, writes), new SourceCache(_fetcher, _time));
         await feed.BuildAsync(calendar.Token, default);
 
         _time.Advance(TimeSpan.FromMinutes(6));
@@ -219,7 +219,7 @@ public sealed class FeedServiceTests : IDisposable
     {
         var calendar = await CalendarWithSourcesAsync(UrlA);
         var writes = new CountingSaves();
-        var feed = new FeedService(new InterceptingFactory(_db, writes), new SourceCache(_fetcher, _time), _time);
+        var feed = new FeedService(new InterceptingFactory(_db, writes), new SourceCache(_fetcher, _time));
         await feed.BuildAsync(calendar.Token, default);
         var firstSuccess = _time.GetUtcNow().UtcDateTime;
 
