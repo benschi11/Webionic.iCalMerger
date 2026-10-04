@@ -1,0 +1,337 @@
+@page "/admin/users"
+@attribute [Authorize(Roles = Roles.Admin)]
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+@inject UserAdminService Admin
+@inject CurrentUser User
+@inject NavigationManager Navigation
+@inject IJSRuntime Js
+
+<PageTitle>Nutzer</PageTitle>
+
+<div class="pagehead">
+    <div>
+        <h1 class="page">Nutzer</h1>
+        @if (users is not null)
+        {
+            <p class="sub">@users.Count @(users.Count == 1 ? "Konto" : "Konten")</p>
+        }
+    </div>
+    <button type="button" class="btn btn-primary" disabled="@sessionEnding" @onclick="StartInvite"><Icon Name="plus" />Nutzer einladen</button>
+</div>
+
+@if (error is not null)
+{
+    <div class="notice err" role="alert">@error</div>
+}
+@if (info is not null)
+{
+    <div class="notice ok" role="status">@info</div>
+}
+
+@if (inviting)
+{
+    <form class="panel create" @onsubmit="InviteAsync">
+        <label for="invite-email" class="field-label">E-Mail-Adresse des neuen Nutzers</label>
+        <div class="form-row">
+            <input @ref="inviteInput" id="invite-email" class="input" type="email" @bind="inviteEmail" @bind:event="oninput" placeholder="name@example.com" autocomplete="off" />
+            <button type="submit" class="btn btn-navy" disabled="@busy">Einladen</button>
+            <button type="button" class="btn btn-quiet" @onclick="CancelInvite">Abbrechen</button>
+        </div>
+    </form>
+}
+
+@if (link is not null)
+{
+    <div class="invite" role="status">
+        <strong>@linkTitle</strong>
+        <code>@link</code>
+        <button type="button" class="btn btn-navy" @onclick="CopyLinkAsync"><Icon Name="copy" />@(copied ? "Kopiert" : "Link kopieren")</button>
+        <button type="button" class="btn btn-quiet" @onclick="CloseLink">Schließen</button>
+        <p>Einmaliger Link, 7 Tage gültig. Er wird nur jetzt angezeigt. Ältere Links werden ungültig. Gib ihn selbst weiter, es wird keine E-Mail versendet.</p>
+    </div>
+}
+
+@if (sessionEnding)
+{
+}
+else if (users is null)
+{
+    <p class="text-muted">Lade …</p>
+}
+else
+{
+    <section class="panel table-panel" aria-label="Nutzerliste">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th scope="col">E-Mail</th>
+                    <th scope="col">Status</th>
+                    <th scope="col" class="tabular-nums">Kalender</th>
+                    <th scope="col"><span class="sr-only">Aktionen</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var user in users)
+                {
+                    var isMe = user.Id == myId;
+                    <tr>
+                        <td data-label="E-Mail">
+                            <strong>@user.Email</strong>
+                            @if (isMe)
+                            {
+                                <div class="text-[0.8125rem] text-muted">Das bist du</div>
+                            }
+                        </td>
+                        <td data-label="Status">
+                            <span class="chip @(user.IsAdmin ? "admin" : "user")">@(user.IsAdmin ? "Admin" : "Nutzer")</span>
+                            @if (!user.HasPassword)
+                            {
+                                <span class="chip invited">Eingeladen</span>
+                            }
+                            @if (user.IsLockedOut)
+                            {
+                                <span class="chip locked">Gesperrt</span>
+                            }
+                        </td>
+                        <td data-label="Kalender" class="tabular-nums">@user.CalendarCount</td>
+                        <td>
+                            <div class="actions">
+                                @if (user.IsLockedOut)
+                                {
+                                    <button type="button" class="btn btn-quiet btn-sm" disabled="@busy" @onclick="() => SetLockedAsync(user.Id, false)">Entsperren</button>
+                                }
+                                else if (!isMe)
+                                {
+                                    <button type="button" class="btn btn-quiet btn-sm" disabled="@busy" @onclick="() => ResetLinkAsync(user)">@(user.HasPassword ? "Passwort-Link" : "Neuer Link")</button>
+                                }
+                                <MoreMenu Label="@($"Weitere Aktionen für {user.Email}")">
+                                    @if (user.IsAdmin)
+                                    {
+                                        <button type="button" role="menuitem" disabled="@busy" @onclick="() => AskAdminChange(user, false)">Admin entziehen</button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" role="menuitem" disabled="@busy" @onclick="() => SetAdminAsync(user.Id, true)">Zum Admin machen</button>
+                                    }
+                                    @if (!user.IsLockedOut)
+                                    {
+                                        <button type="button" role="menuitem" disabled="@busy" @onclick="() => AskLock(user)">Sperren</button>
+                                    }
+                                    @if (!isMe)
+                                    {
+                                        <button type="button" role="menuitem" class="danger" disabled="@busy" @onclick="() => AskDelete(user)">Löschen</button>
+                                    }
+                                </MoreMenu>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </section>
+    <p class="mt-5 text-[0.8125rem] text-muted">Der letzte aktive Admin kann nicht gesperrt, herabgestuft oder gelöscht werden.</p>
+}
+
+@if (pending is not null)
+{
+    <ConfirmDialog Title="@pendingTitle" ConfirmText="@pendingConfirm" Busy="busy"
+                   OnConfirm="ConfirmPendingAsync" OnCancel="CancelPending">
+        @pendingText
+    </ConfirmDialog>
+}
+
+@code {
+    private enum PendingKind { Delete, Lock, Demote }
+
+    private sealed record PendingAction(PendingKind Kind, UserRow Target);
+
+    private List<UserRow>? users;
+    private string myId = "";
+    private string inviteEmail = "";
+    private bool inviting;
+    private bool focusInvite;
+    private ElementReference inviteInput;
+    private PendingAction? pending;
+    private string pendingTitle = "";
+    private string pendingConfirm = "";
+    private string pendingText = "";
+    private string? link;
+    private string linkTitle = "";
+    private bool copied;
+    private string? error;
+    private string? info;
+    private bool busy;
+    private bool sessionEnding;
+
+    // Die Basis für Links kommt aus App:PublicBaseUrl (falls gesetzt), sonst aus dieser Adresse.
+    private string BaseUri => Navigation.BaseUri;
+
+    protected override async Task OnInitializedAsync()
+    {
+        myId = await User.GetIdAsync();
+        await LoadAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (focusInvite)
+        {
+            focusInvite = false;
+            await inviteInput.FocusAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            users = await Admin.ListAsync();
+        }
+        catch (DomainException ex)
+        {
+            error = ex.Message;
+        }
+    }
+
+    private void StartInvite()
+    {
+        inviting = true;
+        focusInvite = true;
+    }
+
+    private void CancelInvite()
+    {
+        inviting = false;
+        inviteEmail = "";
+    }
+
+    private void CloseLink()
+    {
+        link = null;
+        copied = false;
+    }
+
+    private void AskDelete(UserRow user)
+    {
+        pending = new PendingAction(PendingKind.Delete, user);
+        pendingTitle = $"Nutzer {user.Email} löschen?";
+        pendingConfirm = "Nutzer löschen";
+        pendingText = "Alle Kalender dieses Nutzers werden mitgelöscht, ihre Feed-Adressen funktionieren danach nicht mehr.";
+    }
+
+    private void AskLock(UserRow user)
+    {
+        pending = new PendingAction(PendingKind.Lock, user);
+        var isMe = user.Id == myId;
+        pendingTitle = isMe ? "Dich selbst sperren?" : $"Nutzer {user.Email} sperren?";
+        pendingConfirm = isMe ? "Mich sperren" : "Nutzer sperren";
+        pendingText = isMe
+            ? "Du wirst innerhalb einer Minute abgemeldet und kannst danach nichts mehr verwalten und dich nicht mehr anmelden, bis ein anderer Admin dich entsperrt."
+            : "Der Nutzer wird abgemeldet und kann sich nicht mehr anmelden, bis du ihn entsperrst.";
+    }
+
+    private Task AskAdminChange(UserRow user, bool makeAdmin)
+    {
+        if (user.Id != myId)
+        {
+            return SetAdminAsync(user.Id, makeAdmin);
+        }
+
+        pending = new PendingAction(PendingKind.Demote, user);
+        pendingTitle = "Dir selbst die Admin-Rolle entziehen?";
+        pendingConfirm = "Admin-Rolle entziehen";
+        pendingText = "Du wirst innerhalb einer Minute abgemeldet und kannst danach nichts mehr verwalten, bis dich ein anderer Admin wieder zum Admin macht.";
+        return Task.CompletedTask;
+    }
+
+    private void CancelPending() => pending = null;
+
+    private Task ConfirmPendingAsync()
+    {
+        var action = pending!;
+        return action.Kind switch
+        {
+            PendingKind.Delete => RunAsync(() => Admin.DeleteAsync(action.Target.Id, myId), "Nutzer gelöscht."),
+            PendingKind.Lock => SetLockedAsync(action.Target.Id, true),
+            _ => SetAdminAsync(action.Target.Id, false),
+        };
+    }
+
+    private async Task RunAsync(Func<Task> action, string? success = null, bool endsSession = false)
+    {
+        error = null;
+        info = null;
+        busy = true;
+        try
+        {
+            await action();
+            if (endsSession)
+            {
+                // Nichts Veraltetes anzeigen: Die Sitzung endet gleich, die Liste verschwindet.
+                users = null;
+                link = null;
+                info = "Gespeichert. Deine Sitzung endet in Kürze, danach kannst du hier nichts mehr verwalten.";
+                sessionEnding = true;
+            }
+            else
+            {
+                await LoadAsync();
+                info = success;
+            }
+        }
+        catch (DomainException ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+            pending = null;
+        }
+    }
+
+    private Task InviteAsync() => RunAsync(async () =>
+    {
+        var email = inviteEmail.Trim();
+        link = await Admin.InviteAsync(email, BaseUri, myId);
+        linkTitle = $"Einladung für {email} erstellt.";
+        inviteEmail = "";
+        inviting = false;
+        copied = false;
+    });
+
+    private Task ResetLinkAsync(UserRow user) => RunAsync(async () =>
+    {
+        link = await Admin.CreateResetLinkAsync(user.Id, BaseUri, myId);
+        linkTitle = user.HasPassword ? $"Passwort-Link für {user.Email} erstellt." : $"Neuer Einladungslink für {user.Email} erstellt.";
+        copied = false;
+    });
+
+    private Task SetLockedAsync(string id, bool locked) =>
+        RunAsync(() => Admin.SetLockedAsync(id, locked, myId), locked ? "Nutzer gesperrt." : "Nutzer entsperrt.", endsSession: locked && id == myId);
+
+    private Task SetAdminAsync(string id, bool isAdmin) =>
+        RunAsync(() => Admin.SetAdminAsync(id, isAdmin, myId), isAdmin ? "Nutzer ist jetzt Admin." : "Admin-Rolle entzogen.", endsSession: !isAdmin && id == myId);
+
+    private async Task CopyLinkAsync()
+    {
+        try
+        {
+            await Js.InvokeVoidAsync("navigator.clipboard.writeText", link);
+            error = null;
+            copied = true;
+            StateHasChanged();
+            await Task.Delay(2000);
+            copied = false;
+            StateHasChanged();
+        }
+        catch (JSException)
+        {
+            error = "Kopieren nicht möglich – bitte manuell markieren.";
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+}

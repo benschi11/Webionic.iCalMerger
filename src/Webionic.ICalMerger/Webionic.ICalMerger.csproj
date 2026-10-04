@@ -1,0 +1,83 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>aspnet-Webionic_ICalMerger-781648c4-0506-4c70-a91a-55af2c6de41b</UserSecretsId>
+    <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+  </PropertyGroup>
+
+  <!-- Tailwind CSS v4 Standalone-CLI: kein Node nötig. Die Version ist gepinnt. Die Binärdatei wird beim ersten Build
+       nach tools/tailwind/ geladen (gitignored). Schlägt der Download fehl, läuft der Build mit einer Warnung
+       weiter und verwendet die eingecheckte wwwroot/css/app.css.
+       Mit -p:SkipTailwind=true wird die CSS-Erzeugung übersprungen (für dotnet watch, siehe README). -->
+  <PropertyGroup>
+    <TailwindVersion>4.3.3</TailwindVersion>
+    <TailwindDir>$(MSBuildProjectDirectory)/tools/tailwind/</TailwindDir>
+    <TailwindMusl Condition="Exists('/etc/alpine-release')">-musl</TailwindMusl>
+    <TailwindAsset Condition="$([MSBuild]::IsOSPlatform('Windows'))">tailwindcss-windows-x64.exe</TailwindAsset>
+    <TailwindAsset Condition="$([MSBuild]::IsOSPlatform('OSX')) And '$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' == 'Arm64'">tailwindcss-macos-arm64</TailwindAsset>
+    <TailwindAsset Condition="$([MSBuild]::IsOSPlatform('OSX')) And '$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' != 'Arm64'">tailwindcss-macos-x64</TailwindAsset>
+    <TailwindAsset Condition="$([MSBuild]::IsOSPlatform('Linux')) And '$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' == 'Arm64'">tailwindcss-linux-arm64$(TailwindMusl)</TailwindAsset>
+    <TailwindAsset Condition="$([MSBuild]::IsOSPlatform('Linux')) And '$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' != 'Arm64'">tailwindcss-linux-x64$(TailwindMusl)</TailwindAsset>
+    <TailwindExe>$(TailwindDir)$(TailwindVersion)-$(TailwindAsset)</TailwindExe>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Webionic.ICalMerger.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="tools/**" />
+  </ItemGroup>
+
+  <!-- SHA256 der Release-Assets von v4.3.3 (sha256sums.txt des GitHub-Releases). Bei neuer Version alle Werte ersetzen. -->
+  <PropertyGroup>
+    <TailwindSha256 Condition="'$(TailwindAsset)' == 'tailwindcss-linux-x64'">dc61b3ac6b8c9ca874c0cc4c57b2409791a64c5540404ca5f5367360babc313a</TailwindSha256>
+    <TailwindSha256 Condition="'$(TailwindAsset)' == 'tailwindcss-linux-x64-musl'">a04d34ceacc8f52cbe8920ad846cdeb61d3d0021dba32db0d1f77c9d9fad7a6c</TailwindSha256>
+    <TailwindSha256 Condition="'$(TailwindAsset)' == 'tailwindcss-linux-arm64'">55fd0b241214eff3de1e8ee4f22796662f2d2e7a49bcfca7477cfd0bac398195</TailwindSha256>
+    <TailwindSha256 Condition="'$(TailwindAsset)' == 'tailwindcss-linux-arm64-musl'">71ea4be79c9de9827545682df3e040053fb535d37c71ed2cfdedf9385a0868e0</TailwindSha256>
+    <TailwindSha256 Condition="'$(TailwindAsset)' == 'tailwindcss-macos-x64'">7922e0953f2110c05976e3bf58f14e643d90427575e766b7d433f5f80cbee7e1</TailwindSha256>
+    <TailwindSha256 Condition="'$(TailwindAsset)' == 'tailwindcss-macos-arm64'">cdf646702987a743464dff4d9c60fd4480d1c1e73dd819a9a67f1078815dce9d</TailwindSha256>
+    <TailwindSha256 Condition="'$(TailwindAsset)' == 'tailwindcss-windows-x64.exe'">e0e260ce048014e9268f6237ff18f8ccf02cef521cbd0ae04e82c2cdf7aa3955</TailwindSha256>
+    <TailwindTemp>$(TailwindDir)$(TailwindVersion)-$(TailwindAsset).download</TailwindTemp>
+  </PropertyGroup>
+
+  <!-- Der Download landet zuerst in einer Temp-Datei. Erst nach erfolgreicher Hash-Prüfung wird er an den Zielpfad verschoben,
+       eine beschädigte Datei liegt nie am endgültigen Pfad. Hash-Abweichung ist ein Fehler, ein Netzwerkfehler nur eine Warnung. -->
+  <Target Name="TailwindDownload" Condition="'$(SkipTailwind)' != 'true' And !Exists('$(TailwindExe)')">
+    <Delete Files="$(TailwindTemp)" />
+    <DownloadFile SourceUrl="https://github.com/tailwindlabs/tailwindcss/releases/download/v$(TailwindVersion)/$(TailwindAsset)"
+                  DestinationFolder="$(TailwindDir)" DestinationFileName="$(TailwindVersion)-$(TailwindAsset).download"
+                  Retries="3" ContinueOnError="WarnAndContinue" />
+    <GetFileHash Condition="Exists('$(TailwindTemp)')" Files="$(TailwindTemp)" Algorithm="SHA256" HashEncoding="hex">
+      <Output TaskParameter="Items" ItemName="TailwindDownloadHash" />
+    </GetFileHash>
+    <PropertyGroup Condition="Exists('$(TailwindTemp)')">
+      <TailwindActualHash>%(TailwindDownloadHash.FileHash)</TailwindActualHash>
+    </PropertyGroup>
+    <Delete Condition="Exists('$(TailwindTemp)') And '$([System.String]::Copy($(TailwindActualHash)).ToLowerInvariant())' != '$(TailwindSha256)'" Files="$(TailwindTemp)" />
+    <Error Condition="'$(TailwindActualHash)' != '' And '$([System.String]::Copy($(TailwindActualHash)).ToLowerInvariant())' != '$(TailwindSha256)'"
+           Text="SHA256 der Tailwind-CLI $(TailwindAsset) stimmt nicht überein (erwartet $(TailwindSha256), erhalten $(TailwindActualHash)). Die Datei wurde verworfen." />
+    <Move Condition="Exists('$(TailwindTemp)')" SourceFiles="$(TailwindTemp)" DestinationFiles="$(TailwindExe)" />
+    <Exec Condition="Exists('$(TailwindExe)') And !$([MSBuild]::IsOSPlatform('Windows'))" Command="chmod +x &quot;$(TailwindExe)&quot;" />
+  </Target>
+
+  <Target Name="TailwindBuild" BeforeTargets="BeforeBuild" DependsOnTargets="TailwindDownload" Condition="'$(SkipTailwind)' != 'true'">
+    <Warning Condition="!Exists('$(TailwindExe)')" Text="Tailwind-CLI nicht verfügbar: wwwroot/css/app.css wird nicht neu erzeugt." />
+    <Exec Condition="Exists('$(TailwindExe)')" Command="&quot;$(TailwindExe)&quot; -i Styles/app.css -o wwwroot/css/app.css --minify" WorkingDirectory="$(MSBuildProjectDirectory)" />
+  </Target>
+
+  <!-- Entwicklung: dotnet msbuild src/Webionic.ICalMerger -t:TailwindWatch (läuft bis Strg+C, nicht minimiert) -->
+  <Target Name="TailwindWatch" DependsOnTargets="TailwindDownload">
+    <Exec Command="&quot;$(TailwindExe)&quot; -i Styles/app.css -o wwwroot/css/app.css --watch" WorkingDirectory="$(MSBuildProjectDirectory)" />
+  </Target>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.*" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.*" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.*" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>

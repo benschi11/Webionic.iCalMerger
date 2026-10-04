@@ -4547,10 +4547,10 @@ Hänge den folgenden Block ans Ende von `src/Webionic.ICalMerger/Styles/app.css`
   svg.i { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 
   /* Formularzeilen */
-  .inline { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-  .inline > .input { flex: 1 1 260px; width: auto; }
+  .form-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .form-row > .input { flex: 1 1 260px; width: auto; }
 
-  .feed :focus-visible, .scrim :focus-visible { outline-color: var(--color-honey-400); }
+  .feed :focus-visible { outline-color: var(--color-honey-400); }
 
   /* Topbar und Layout */
   .topbar {
@@ -4652,6 +4652,7 @@ Hänge den folgenden Block ans Ende von `src/Webionic.ICalMerger/Styles/app.css`
   .dialog { background: #fff; border-radius: 24px; padding: 28px; max-width: 440px; width: 100%; box-shadow: var(--shadow-soft); }
   .dialog h2 { font: 700 1.375rem var(--font-display); margin: 0 0 8px; }
   .dialog p { margin: 0 0 20px; }
+  body:has(.scrim) { overflow: hidden; }
   .dialog .btns { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
 
   /* Admin */
@@ -5320,7 +5321,7 @@ In `Components/_Imports.razor` ergänzen:
 {
     <EditForm Model="form" OnValidSubmit="CreateAsync" FormName="create-calendar" class="panel create">
         <label for="new-name" class="field-label">Name des Kalenders</label>
-        <div class="inline">
+        <div class="form-row">
             <InputText @ref="nameInput" id="new-name" @bind-Value="form.Name" class="input" placeholder="z. B. Familie" maxlength="100" autocomplete="off" />
             <button type="submit" class="btn btn-navy" disabled="@busy">Anlegen</button>
             <button type="button" class="btn btn-quiet" @onclick="CancelCreate">Abbrechen</button>
@@ -5469,7 +5470,7 @@ else
     <div class="pagehead">
         @if (renaming)
         {
-            <form class="inline min-w-0 flex-auto" @onsubmit="RenameAsync">
+            <form class="form-row min-w-0 flex-auto" @onsubmit="RenameAsync">
                 <label class="sr-only" for="rename">Name des Kalenders</label>
                 <input id="rename" class="input" @bind="renameValue" @bind:event="oninput" maxlength="100" autocomplete="off" />
                 <button type="submit" class="btn btn-navy" disabled="@busy">Speichern</button>
@@ -5955,7 +5956,7 @@ Die Seite folgt dem Mockup (Abschnitt 3): Tabelle mit Rollen- und Statuschips, K
 {
     <form class="panel create" @onsubmit="InviteAsync">
         <label for="invite-email" class="field-label">E-Mail-Adresse des neuen Nutzers</label>
-        <div class="inline">
+        <div class="form-row">
             <input @ref="inviteInput" id="invite-email" class="input" type="email" @bind="inviteEmail" @bind:event="oninput" placeholder="name@example.com" autocomplete="off" />
             <button type="submit" class="btn btn-navy" disabled="@busy">Einladen</button>
             <button type="button" class="btn btn-quiet" @onclick="CancelInvite">Abbrechen</button>

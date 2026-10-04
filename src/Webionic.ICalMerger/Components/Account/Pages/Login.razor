@@ -1,0 +1,78 @@
+@page "/Account/Login"
+
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Identity
+@using Webionic.ICalMerger.Data
+
+@inject SignInManager<ApplicationUser> SignInManager
+@inject IdentityRedirectManager RedirectManager
+
+<PageTitle>Anmelden</PageTitle>
+
+<h1>Anmelden</h1>
+<div class="max-w-md">
+    <StatusMessage Message="@errorMessage" />
+    <EditForm Model="Input" method="post" OnValidSubmit="LoginUser" FormName="login">
+        <DataAnnotationsValidator />
+        <ValidationSummary role="alert" />
+        <div class="mb-4">
+            <label for="Input.Email" class="field-label">E-Mail</label>
+            <InputText @bind-Value="Input.Email" id="Input.Email" class="input" autocomplete="username" aria-required="true" placeholder="name@example.com" />
+            <ValidationMessage For="() => Input.Email" />
+        </div>
+        <div class="mb-4">
+            <label for="Input.Password" class="field-label">Passwort</label>
+            <InputText type="password" @bind-Value="Input.Password" id="Input.Password" class="input" autocomplete="current-password" aria-required="true" placeholder="Passwort" />
+            <ValidationMessage For="() => Input.Password" />
+        </div>
+        <label class="mb-4 flex items-center gap-2 font-medium">
+            <InputCheckbox @bind-Value="Input.RememberMe" class="size-4 accent-navy-900" />
+            Angemeldet bleiben
+        </label>
+        <button type="submit" class="btn btn-primary btn-lg w-full">Anmelden</button>
+    </EditForm>
+    <p class="mt-4 text-muted">Passwort vergessen? Bitte melde dich beim Admin, er schickt dir einen neuen Link.</p>
+</div>
+
+@code {
+    private string? errorMessage;
+
+    [SupplyParameterFromForm]
+    private InputModel Input { get; set; } = default!;
+
+    [SupplyParameterFromQuery]
+    private string? ReturnUrl { get; set; }
+
+    protected override void OnInitialized() => Input ??= new();
+
+    private async Task LoginUser()
+    {
+        var result = await SignInManager.PasswordSignInAsync(Input.Email, Input.Password, Input.RememberMe, lockoutOnFailure: true);
+
+        if (result.Succeeded)
+        {
+            RedirectManager.RedirectTo(ReturnUrl);
+        }
+        else if (result.IsLockedOut)
+        {
+            RedirectManager.RedirectTo("Account/Lockout");
+        }
+        else
+        {
+            errorMessage = "Fehler: E-Mail oder Passwort ist falsch.";
+        }
+    }
+
+    private sealed class InputModel
+    {
+        [Required(ErrorMessage = "Bitte eine E-Mail-Adresse eingeben.")]
+        [EmailAddress(ErrorMessage = "Das ist keine gültige E-Mail-Adresse.")]
+        public string Email { get; set; } = "";
+
+        [Required(ErrorMessage = "Bitte ein Passwort eingeben.")]
+        [DataType(DataType.Password)]
+        public string Password { get; set; } = "";
+
+        public bool RememberMe { get; set; }
+    }
+}

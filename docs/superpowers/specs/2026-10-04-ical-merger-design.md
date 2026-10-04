@@ -47,7 +47,7 @@ Einheiten (jede einzeln testbar, klare Schnittstelle):
 |---|---|---|
 | `IcsMerger` | Reine Funktion: Liste von ICS-Texten + Kalendername → ein ICS-Text | keine |
 | `SafeHttpFetcher` | Holt eine URL sicher (Timeout, Größenlimit, SSRF-Schutz) | `HttpClient` |
-| `SourceCache` | Cache pro Quell-URL, 5 Min TTL, behält letzten guten Stand | `IMemoryCache`, Fetcher |
+| `SourceCache` | Cache pro Quell-URL, 5 Min TTL, behält letzten guten Stand | eigener `ConcurrentDictionary`-Cache mit Idle-Eviction (7 Tage) und Single-Flight pro URL, Fetcher |
 | `FeedService` | Lädt Quellen eines Merge-Kalenders parallel, ruft `IcsMerger` | Cache, DB |
 | `GET /feed/{token}.ics` | Öffentlicher Minimal-API-Endpunkt | `FeedService` |
 | Blazor-Seiten | Login, Kalenderliste, Kalenderdetail, Admin-Nutzerverwaltung | Identity, EF Core |
@@ -117,7 +117,7 @@ geloggt und in der UI standardmäßig gekürzt angezeigt (Host + Anfang).
 
 - Unbekanntes Token: `404` ohne Details.
 - Erfolg: `200`, `Content-Type: text/calendar; charset=utf-8`,
-  `Cache-Control: max-age=300`.
+  `Cache-Control: public, max-age=300`.
 - Fallen alle Quellen aus und gibt es keinen Cache: `200` mit leerem, gültigem
   Kalender wäre irreführend (Apps würden alle Termine löschen), daher `503`.
   Fällt nur ein Teil aus, wird der Rest geliefert.

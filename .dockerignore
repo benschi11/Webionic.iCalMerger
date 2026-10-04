@@ -1,0 +1,10 @@
+**/bin
+**/obj
+**/data
+**/tools
+.git
+.claude
+.superpowers
+docs
+tests
+*.md

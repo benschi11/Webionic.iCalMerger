@@ -1,0 +1,70 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<div class="scrim" @onclick="Cancel">
+    <div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="dialog-title" aria-describedby="dialog-text"
+         tabindex="-1" @ref="dialog" @onclick:stopPropagation="true" @onkeydown="OnKey">
+        <span tabindex="0" @onfocus="FocusLast"></span>
+        <h2 id="dialog-title">@Title</h2>
+        <p id="dialog-text">@ChildContent</p>
+        <div class="btns">
+            <button type="button" class="btn btn-quiet" @ref="cancelButton" @onclick="Cancel" disabled="@Busy">Abbrechen</button>
+            <button type="button" class="btn @(Destructive ? "btn-err" : "btn-navy")" @ref="confirmButton" @onclick="Confirm" disabled="@Busy">@ConfirmText</button>
+        </div>
+        <span tabindex="0" @onfocus="FocusFirst"></span>
+    </div>
+</div>
+
+@code {
+    private ElementReference dialog;
+    private ElementReference cancelButton;
+    private ElementReference confirmButton;
+    private IJSObjectReference? module;
+    private bool wasBusy;
+
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public string ConfirmText { get; set; } = "";
+    [Parameter] public bool Destructive { get; set; } = true;
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter, EditorRequired] public EventCallback OnConfirm { get; set; }
+    [Parameter, EditorRequired] public EventCallback OnCancel { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/dialog-focus.js");
+            await module.InvokeVoidAsync("capture");
+            await cancelButton.FocusAsync();
+        }
+        else if (Busy && !wasBusy)
+        {
+            // Deaktivierte Buttons verlieren den Fokus; der Dialog fängt ihn auf, damit Tastaturereignisse ankommen.
+            await dialog.FocusAsync();
+        }
+        wasBusy = Busy;
+    }
+
+    // Fokusfalle: Die unsichtbaren Randelemente schicken Tab/Umschalt+Tab an das andere Ende des Dialogs.
+    private async Task FocusFirst() => await (Busy ? dialog : cancelButton).FocusAsync();
+
+    private async Task FocusLast() => await (Busy ? dialog : confirmButton).FocusAsync();
+
+    private Task Cancel() => Busy ? Task.CompletedTask : OnCancel.InvokeAsync();
+
+    private Task Confirm() => OnConfirm.InvokeAsync();
+
+    private Task OnKey(KeyboardEventArgs e) => e.Key == "Escape" ? Cancel() : Task.CompletedTask;
+
+    public async ValueTask DisposeAsync()
+    {
+        if (module is null) return;
+        try
+        {
+            await module.InvokeVoidAsync("restore");
+            await module.DisposeAsync();
+        }
+        catch (JSDisconnectedException) { }
+    }
+}

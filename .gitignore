@@ -59,3 +59,14 @@ nunit-*.xml
 # Worktrees und SDD-Arbeitsdateien
 .claude/worktrees/
 .superpowers/
+
+# App data
+# Lokales Datenverzeichnis (Datenbanken sind über *.db* erfasst). Bewusst nicht das ganze Verzeichnis:
+# auf case-insensitiven Dateisystemen würde das auch src/Webionic.ICalMerger/Data/ (Quellcode) treffen.
+/src/Webionic.ICalMerger/data/keys/
+*.db
+*.db-shm
+*.db-wal
+
+# Tailwind-CLI (wird beim Build geladen)
+**/tools/tailwind/

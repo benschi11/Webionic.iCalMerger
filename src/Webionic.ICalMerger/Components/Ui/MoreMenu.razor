@@ -1,0 +1,28 @@
+<div class="menu" @onkeydown="OnKey">
+    <button type="button" class="icon-btn" aria-label="@Label" aria-haspopup="menu" aria-expanded="@(open ? "true" : "false")" @onclick="Toggle">
+        <Icon Name="more" />
+    </button>
+    @if (open)
+    {
+        <div class="menu-backdrop" @onclick="Close"></div>
+        <div class="menu-list" role="menu" @onclick="Close">
+            @ChildContent
+        </div>
+    }
+</div>
+
+@code {
+    private bool open;
+
+    [Parameter, EditorRequired] public string Label { get; set; } = "Mehr";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private void Toggle() => open = !open;
+
+    private void Close() => open = false;
+
+    private void OnKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") open = false;
+    }
+}

@@ -1,0 +1,346 @@
+@page "/calendars/{Id:int}"
+@attribute [Authorize]
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+@inject CalendarService Calendars
+@inject CurrentUser User
+@inject NavigationManager Navigation
+@inject IJSRuntime Js
+@inject IOptions<AppLimits> Limits
+@inject TimeProvider Time
+
+<PageTitle>@(calendar?.Name ?? "Kalender")</PageTitle>
+
+@if (loading)
+{
+    <p class="text-muted">Lade …</p>
+}
+else if (calendar is null)
+{
+    <div class="notice err" role="alert">Kalender nicht gefunden. <a href="">Zur Übersicht</a></div>
+}
+else
+{
+    var sources = calendar.Sources;
+    var now = Now;
+    var atSourceLimit = sources.Count >= Limits.Value.MaxSourcesPerCalendar;
+
+    <a class="back" href=""><Icon Name="back" />Alle Kalender</a>
+
+    <div class="pagehead">
+        @if (renaming)
+        {
+            <form class="form-row min-w-0 flex-auto" @onsubmit="RenameAsync">
+                <label class="sr-only" for="rename">Name des Kalenders</label>
+                <input id="rename" class="input" @bind="renameValue" @bind:event="oninput" maxlength="100" autocomplete="off" />
+                <button type="submit" class="btn btn-navy" disabled="@busy">Speichern</button>
+                <button type="button" class="btn btn-quiet" @onclick="CancelRename">Abbrechen</button>
+            </form>
+        }
+        else
+        {
+            <h1 class="page">@calendar.Name</h1>
+            <button type="button" class="btn btn-quiet" @onclick="StartRename"><Icon Name="edit" />Umbenennen</button>
+        }
+    </div>
+
+    @if (error is not null)
+    {
+        <div class="notice err" role="alert">@error</div>
+    }
+    @if (info is not null)
+    {
+        <div class="notice ok" role="status">@info</div>
+    }
+
+    <section class="feed" aria-labelledby="feed-title">
+        <h2 id="feed-title">Feed-Adresse</h2>
+        <p>Diese Adresse in der Kalender-App abonnieren. Wer sie kennt, sieht alle Termine.</p>
+        <div class="feedbox">
+            <code>@FeedUrl</code>
+            <button type="button" class="btn btn-primary" @onclick="CopyAsync"><Icon Name="copy" />@(copied ? "Kopiert" : "Kopieren")</button>
+        </div>
+        <span class="sr-only" role="status">@(copied ? "Adresse kopiert" : "")</span>
+        <div class="tools">
+            <span>Zuletzt abgerufen: @RelativeTime.Ago(sources.Select(s => s.LastAttemptAt).Max(), now)</span>
+            <button type="button" class="linkbtn" @onclick="() => pending = Pending.Regenerate">Neue Adresse erzeugen</button>
+        </div>
+    </section>
+
+    <section class="panel" aria-labelledby="sources-title">
+        <div class="sec-head">
+            <h2 id="sources-title">Quellen</h2>
+            <span class="text-[0.8125rem] text-muted">@sources.Count von @Limits.Value.MaxSourcesPerCalendar</span>
+        </div>
+        <p class="sec-sub">Bei doppelten Terminen gewinnt die Quelle weiter oben.</p>
+
+        @if (sources.Count == 0)
+        {
+            <p class="text-muted">Noch keine Quellen. Füge unten die erste hinzu.</p>
+        }
+
+        @for (var i = 0; i < sources.Count; i++)
+        {
+            var source = sources[i];
+            var index = i;
+            var line = StatusText.Source(source, now);
+
+            <div class="src @(line.Status == SourceStatus.Error ? "bad" : line.Status == SourceStatus.Stale ? "stale" : null)">
+                @if (editingId == source.Id)
+                {
+                    <form class="src-edit" @onsubmit="() => SaveEditAsync(source.Id)">
+                        <input class="input" @bind="editName" @bind:event="oninput" placeholder="Name" maxlength="100" aria-label="Name der Quelle" />
+                        <input class="input" @bind="editUrl" @bind:event="oninput" placeholder="https://… oder webcal://…" aria-label="Adresse der Quelle" inputmode="url" autocomplete="off" />
+                        <div class="btns">
+                            <button type="submit" class="btn btn-navy btn-sm" disabled="@busy">@(busy ? "Prüfe Adresse …" : "Speichern")</button>
+                            <button type="button" class="btn btn-quiet btn-sm" @onclick="() => editingId = null">Abbrechen</button>
+                        </div>
+                    </form>
+                }
+                else
+                {
+                    <span class="rank" title="Priorität @(index + 1)">@(index + 1)</span>
+                    <StatusHex Status="line.Status" />
+                    <div>
+                        <div class="name">@source.Name</div>
+                        <div class="u">@Mask(source.Url)</div>
+                        <div class="mst">@line.Text@(line.Detail is null ? "" : $" · {line.Detail}")</div>
+                    </div>
+                    <div class="st">
+                        @line.Text
+                        @if (line.Detail is not null)
+                        {
+                            <br /><span class="detail">@line.Detail</span>
+                        }
+                    </div>
+                    <div class="acts" role="group" aria-label="Aktionen für @source.Name">
+                        <button type="button" class="icon-btn" aria-label="@source.Name nach oben" disabled="@(index == 0 || busy)" @onclick="() => MoveAsync(source.Id, -1)"><Icon Name="up" /></button>
+                        <button type="button" class="icon-btn" aria-label="@source.Name nach unten" disabled="@(index == sources.Count - 1 || busy)" @onclick="() => MoveAsync(source.Id, 1)"><Icon Name="down" /></button>
+                        <button type="button" class="icon-btn" aria-label="@source.Name bearbeiten" @onclick="() => StartEdit(source)"><Icon Name="edit" /></button>
+                        <button type="button" class="icon-btn" aria-label="@source.Name entfernen" disabled="@busy" @onclick="() => AskDeleteSource(source)"><Icon Name="trash" /></button>
+                    </div>
+                    <div class="src-more">
+                        <MoreMenu Label="@($"Aktionen für {source.Name}")">
+                            <button type="button" role="menuitem" disabled="@(index == 0 || busy)" @onclick="() => MoveAsync(source.Id, -1)">Nach oben</button>
+                            <button type="button" role="menuitem" disabled="@(index == sources.Count - 1 || busy)" @onclick="() => MoveAsync(source.Id, 1)">Nach unten</button>
+                            <button type="button" role="menuitem" @onclick="() => StartEdit(source)">Bearbeiten</button>
+                            <button type="button" role="menuitem" class="danger" disabled="@busy" @onclick="() => AskDeleteSource(source)">Entfernen</button>
+                        </MoreMenu>
+                    </div>
+                }
+            </div>
+        }
+
+        <form class="add" @onsubmit="AddSourceAsync">
+            <input class="input" @bind="newName" @bind:event="oninput" placeholder="Name (optional)" maxlength="100" aria-label="Name der neuen Quelle" autocomplete="off" />
+            <input class="input" @bind="newUrl" @bind:event="oninput" placeholder="https://… oder webcal://…" aria-label="Adresse der neuen Quelle" inputmode="url" autocomplete="off" />
+            <button type="submit" class="btn btn-navy" disabled="@(busy || atSourceLimit)">
+                <Icon Name="plus" />@(adding ? "Prüfe Adresse …" : "Quelle hinzufügen")
+            </button>
+        </form>
+        @if (atSourceLimit)
+        {
+            <p class="text-[0.8125rem] text-muted">Das Limit von @Limits.Value.MaxSourcesPerCalendar Quellen ist erreicht.</p>
+        }
+    </section>
+
+    <div class="danger-zone">
+        <p>Der Kalender und seine Feed-Adresse werden unwiderruflich gelöscht.</p>
+        <button type="button" class="btn btn-danger" @onclick="() => pending = Pending.DeleteCalendar">Kalender löschen</button>
+    </div>
+
+    @if (pending == Pending.Regenerate)
+    {
+        <ConfirmDialog Title="Neue Feed-Adresse erzeugen?" ConfirmText="Neue Adresse erzeugen" Busy="busy"
+                       OnConfirm="RegenerateAsync" OnCancel="CloseDialog">
+            Die bisherige Adresse funktioniert sofort nicht mehr. Alle, die den Kalender abonniert haben, müssen die neue Adresse eintragen.
+        </ConfirmDialog>
+    }
+    else if (pending == Pending.DeleteSource)
+    {
+        <ConfirmDialog Title="@($"Quelle „{pendingSourceName}“ entfernen?")" ConfirmText="Quelle entfernen" Busy="busy"
+                       OnConfirm="() => DeleteSourceAsync(pendingSourceId)" OnCancel="CloseDialog">
+            Die Termine dieser Quelle verschwinden beim nächsten Abruf aus dem Feed. Die Adresse der Quelle wird nicht aufbewahrt.
+        </ConfirmDialog>
+    }
+    else if (pending == Pending.DeleteCalendar)
+    {
+        <ConfirmDialog Title="@($"Kalender „{calendar.Name}“ löschen?")" ConfirmText="Kalender löschen" Busy="busy"
+                       OnConfirm="DeleteCalendarAsync" OnCancel="CloseDialog">
+            Der Kalender und seine Feed-Adresse werden unwiderruflich gelöscht. Wer ihn abonniert hat, sieht danach keine Termine mehr.
+        </ConfirmDialog>
+    }
+}
+
+@code {
+    private enum Pending { None, Regenerate, DeleteCalendar, DeleteSource }
+
+    [Parameter]
+    public int Id { get; set; }
+
+    private MergedCalendar? calendar;
+    private bool loading = true;
+    private bool busy;
+    private bool adding;
+    private bool copied;
+    private string ownerId = "";
+    private string? error;
+    private string? info;
+    private Pending pending;
+    private int pendingSourceId;
+    private string pendingSourceName = "";
+    private bool renaming;
+    private string renameValue = "";
+    private int? editingId;
+    private string editName = "";
+    private string editUrl = "";
+    private string newName = "";
+    private string newUrl = "";
+
+    private DateTime Now => Time.GetUtcNow().UtcDateTime;
+
+    private string FeedUrl => Navigation.ToAbsoluteUri($"feed/{calendar!.Token}.ics").ToString();
+
+    protected override async Task OnInitializedAsync()
+    {
+        ownerId = await User.GetIdAsync();
+        await LoadAsync();
+        loading = false;
+    }
+
+    private async Task LoadAsync()
+    {
+        calendar = await Calendars.GetAsync(ownerId, Id);
+        renameValue = calendar?.Name ?? "";
+    }
+
+    /// <summary>Führt eine Aktion aus, zeigt DomainException-Meldungen an und lädt den Kalender neu.</summary>
+    private async Task RunAsync(Func<Task> action, string? success = null)
+    {
+        error = null;
+        info = null;
+        busy = true;
+        try
+        {
+            await action();
+            await LoadAsync();
+            info = success;
+        }
+        catch (DomainException ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+            pending = Pending.None;
+        }
+    }
+
+    private async Task AddSourceAsync()
+    {
+        adding = true;
+        try
+        {
+            await RunAsync(async () =>
+            {
+                await Calendars.AddSourceAsync(ownerId, Id, newName, newUrl);
+                newName = "";
+                newUrl = "";
+            }, "Quelle hinzugefügt.");
+        }
+        finally
+        {
+            adding = false;
+        }
+    }
+
+    private void StartEdit(CalendarSource source)
+    {
+        editingId = source.Id;
+        editName = source.Name;
+        editUrl = source.Url;
+    }
+
+    private Task SaveEditAsync(int sourceId) => RunAsync(async () =>
+    {
+        await Calendars.UpdateSourceAsync(ownerId, sourceId, editName, editUrl);
+        editingId = null;
+    }, "Quelle gespeichert.");
+
+    private void AskDeleteSource(CalendarSource source)
+    {
+        pendingSourceId = source.Id;
+        pendingSourceName = source.Name;
+        pending = Pending.DeleteSource;
+    }
+
+    private Task DeleteSourceAsync(int sourceId) => RunAsync(() => Calendars.DeleteSourceAsync(ownerId, sourceId), "Quelle entfernt.");
+
+    private Task MoveAsync(int sourceId, int direction) => RunAsync(() => Calendars.MoveSourceAsync(ownerId, sourceId, direction));
+
+    private void StartRename()
+    {
+        renameValue = calendar!.Name;
+        renaming = true;
+    }
+
+    private void CancelRename() => renaming = false;
+
+    private Task RenameAsync() => RunAsync(async () =>
+    {
+        await Calendars.RenameAsync(ownerId, Id, renameValue);
+        renaming = false;
+    }, "Name gespeichert.");
+
+    private Task RegenerateAsync() => RunAsync(
+        () => Calendars.RegenerateTokenAsync(ownerId, Id),
+        "Neue Feed-Adresse erzeugt. Die alte Adresse ist nicht mehr gültig.");
+
+    private async Task DeleteCalendarAsync()
+    {
+        error = null;
+        busy = true;
+        try
+        {
+            await Calendars.DeleteAsync(ownerId, Id);
+            Navigation.NavigateTo("");
+        }
+        catch (DomainException ex)
+        {
+            error = ex.Message;
+            busy = false;
+            pending = Pending.None;
+        }
+    }
+
+    private void CloseDialog() => pending = Pending.None;
+
+    private async Task CopyAsync()
+    {
+        try
+        {
+            await Js.InvokeVoidAsync("navigator.clipboard.writeText", FeedUrl);
+            error = null;
+            copied = true;
+            StateHasChanged();
+            await Task.Delay(2000);
+            copied = false;
+            StateHasChanged();
+        }
+        catch (JSException)
+        {
+            error = "Kopieren nicht möglich – bitte manuell markieren.";
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    private static string Mask(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return "…";
+        var path = uri.AbsolutePath;
+        return $"{uri.Host}{(path.Length > 12 ? path[..12] : path)}…";
+    }
+}

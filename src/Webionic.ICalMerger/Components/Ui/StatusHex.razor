@@ -1,0 +1,16 @@
+@using Webionic.ICalMerger.Data
+
+<span class="hex @StatusText.Css(Status)" role="img" aria-label="@Label" title="@Label"></span>
+
+@code {
+    [Parameter, EditorRequired]
+    public SourceStatus Status { get; set; }
+
+    private string Label => Status switch
+    {
+        SourceStatus.Ok => "In Ordnung",
+        SourceStatus.Stale => "Zwischenspeicher",
+        SourceStatus.Error => "Fehler",
+        _ => "Noch nicht abgerufen",
+    };
+}
