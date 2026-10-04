@@ -21,24 +21,22 @@ public sealed class FeedService(IDbContextFactory<ApplicationDbContext> dbFactor
         var sources = calendar.Sources.OrderBy(s => s.SortOrder).ThenBy(s => s.Id).ToList();
         var results = await Task.WhenAll(sources.Select(s => cache.GetAsync(s.Url, ct)));
 
-        var now = time.GetUtcNow().UtcDateTime;
+        // Nur schreiben, was sich gegenüber dem gespeicherten Stand wirklich ändert (Cache-Treffer: nichts).
         for (var i = 0; i < sources.Count; i++)
         {
-            sources[i].LastAttemptAt = now;
-            if (results[i].Error is null)
-            {
-                sources[i].LastSuccessAt = now;
-                sources[i].LastError = null;
-            }
-            else
-            {
-                var error = results[i].Error!;
-                sources[i].LastError = error.Length > 500 ? error[..500] : error;
-            }
+            var source = sources[i];
+            var result = results[i];
+            var attempted = result.AttemptedAt?.UtcDateTime;
+            var succeeded = result.SucceededAt?.UtcDateTime;
+            var error = result.Error is { Length: > 500 } e ? e[..500] : result.Error;
+
+            if (attempted is not null && source.LastAttemptAt != attempted) source.LastAttemptAt = attempted;
+            if (succeeded is not null && source.LastSuccessAt != succeeded) source.LastSuccessAt = succeeded;
+            if (source.LastError != error) source.LastError = error;
         }
         try
         {
-            await db.SaveChangesAsync(ct);
+            if (db.ChangeTracker.HasChanges()) await db.SaveChangesAsync(ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

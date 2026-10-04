@@ -211,4 +211,79 @@ public class SourceCacheTests
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => _cache.GetAsync(Url, cts.Token));
     }
+
+    [Fact]
+    public async Task Get_ReportsRealAttemptAndSuccessTimes()
+    {
+        _fetcher.Set(Url, Calendar(Event("a@x")));
+        var fetchTime = _time.GetUtcNow();
+        await _cache.GetAsync(Url, default);
+
+        _time.Advance(TimeSpan.FromMinutes(2));
+        var hit = await _cache.GetAsync(Url, default);
+        Assert.Equal(fetchTime, hit.AttemptedAt);
+        Assert.Equal(fetchTime, hit.SucceededAt);
+
+        _time.Advance(TimeSpan.FromMinutes(4));
+        var failTime = _time.GetUtcNow();
+        _fetcher.Fail(Url, "HTTP 503");
+        var failed = await _cache.GetAsync(Url, default);
+        Assert.Equal(failTime, failed.AttemptedAt);
+        Assert.Equal(fetchTime, failed.SucceededAt);
+    }
+
+    [Fact]
+    public async Task Evicts_EntriesIdleLongerThanWindow()
+    {
+        const string other = "https://example.com/b.ics";
+        _fetcher.Set(Url, Calendar(Event("a@x")));
+        _fetcher.Set(other, Calendar(Event("b@x")));
+        await _cache.GetAsync(Url, default);
+        Assert.Equal(1, _cache.EntryCount);
+
+        _time.Advance(TimeSpan.FromMinutes(61));
+        await _cache.GetAsync(other, default);
+
+        Assert.Equal(1, _cache.EntryCount);
+        await _cache.GetAsync(Url, default);
+        Assert.Equal(2, _fetcher.CallCount(Url));
+    }
+
+    [Fact]
+    public async Task Evict_KeepsEntryAccessedWithinWindow()
+    {
+        const string other = "https://example.com/b.ics";
+        _fetcher.Set(Url, Calendar(Event("a@x")));
+        _fetcher.Set(other, Calendar(Event("b@x")));
+        await _cache.GetAsync(Url, default);
+
+        _time.Advance(TimeSpan.FromMinutes(40));
+        await _cache.GetAsync(Url, default);
+        _time.Advance(TimeSpan.FromMinutes(40));
+        await _cache.GetAsync(other, default);
+
+        Assert.Equal(2, _cache.EntryCount);
+    }
+
+    [Fact]
+    public async Task Evict_KeepsEntryWhoseGateIsHeld()
+    {
+        const string other = "https://example.com/b.ics";
+        var release = new TaskCompletionSource();
+        _fetcher.SetAsync(Url, async _ =>
+        {
+            await release.Task;
+            return Calendar(Event("a@x"));
+        });
+        _fetcher.Set(other, Calendar(Event("b@x")));
+        var pending = _cache.GetAsync(Url, default);
+        await Task.Delay(50);
+
+        _time.Advance(TimeSpan.FromHours(2));
+        await _cache.GetAsync(other, default);
+
+        Assert.Equal(2, _cache.EntryCount);
+        release.SetResult();
+        Assert.Contains("a@x", (await pending).Ics);
+    }
 }

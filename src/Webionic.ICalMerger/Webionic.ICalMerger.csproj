@@ -25,6 +25,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Webionic.ICalMerger.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Remove="tools/**" />
   </ItemGroup>
 

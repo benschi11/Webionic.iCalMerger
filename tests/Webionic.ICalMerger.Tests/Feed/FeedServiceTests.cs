@@ -177,6 +177,96 @@ public sealed class FeedServiceTests : IDisposable
         Assert.Contains("UID:a@x", result!.Ics);
     }
 
+    [Fact]
+    public async Task Build_CacheHit_CausesNoDbWrite()
+    {
+        var calendar = await CalendarWithSourcesAsync(UrlA, UrlB);
+        var writes = new CountingSaves();
+        var feed = new FeedService(new InterceptingFactory(_db, writes), new SourceCache(_fetcher, _time), _time);
+        await feed.BuildAsync(calendar.Token, default);
+        Assert.Equal(1, writes.Count);
+        var before = (await _calendars.GetAsync(_owner, calendar.Id))!.Sources;
+
+        _time.Advance(TimeSpan.FromMinutes(4));
+        await feed.BuildAsync(calendar.Token, default);
+
+        Assert.Equal(1, writes.Count);
+        var after = (await _calendars.GetAsync(_owner, calendar.Id))!.Sources;
+        Assert.Equal(before[0].LastAttemptAt, after[0].LastAttemptAt);
+        Assert.Equal(before[0].LastSuccessAt, after[0].LastSuccessAt);
+    }
+
+    [Fact]
+    public async Task Build_RefetchAfterTtl_WritesOnceWithRealTimestamps()
+    {
+        var calendar = await CalendarWithSourcesAsync(UrlA);
+        var writes = new CountingSaves();
+        var feed = new FeedService(new InterceptingFactory(_db, writes), new SourceCache(_fetcher, _time), _time);
+        await feed.BuildAsync(calendar.Token, default);
+
+        _time.Advance(TimeSpan.FromMinutes(6));
+        var refetchTime = _time.GetUtcNow().UtcDateTime;
+        await feed.BuildAsync(calendar.Token, default);
+
+        Assert.Equal(2, writes.Count);
+        var source = Assert.Single((await _calendars.GetAsync(_owner, calendar.Id))!.Sources);
+        Assert.Equal(refetchTime, source.LastAttemptAt);
+        Assert.Equal(refetchTime, source.LastSuccessAt);
+    }
+
+    [Fact]
+    public async Task Build_ErrorAppearingAndClearing_WritesOncePerChange()
+    {
+        var calendar = await CalendarWithSourcesAsync(UrlA);
+        var writes = new CountingSaves();
+        var feed = new FeedService(new InterceptingFactory(_db, writes), new SourceCache(_fetcher, _time), _time);
+        await feed.BuildAsync(calendar.Token, default);
+        var firstSuccess = _time.GetUtcNow().UtcDateTime;
+
+        _time.Advance(TimeSpan.FromMinutes(6));
+        _fetcher.Fail(UrlA, "HTTP 503");
+        await feed.BuildAsync(calendar.Token, default);
+        Assert.Equal(2, writes.Count);
+
+        _time.Advance(TimeSpan.FromSeconds(30)); // Backoff, kein neuer Abruf
+        await feed.BuildAsync(calendar.Token, default);
+        Assert.Equal(2, writes.Count);
+        var failed = Assert.Single((await _calendars.GetAsync(_owner, calendar.Id))!.Sources);
+        Assert.Equal("HTTP 503", failed.LastError);
+        Assert.Equal(firstSuccess, failed.LastSuccessAt);
+
+        _time.Advance(TimeSpan.FromMinutes(2));
+        _fetcher.Set(UrlA, Calendar(Event("a@x")));
+        await feed.BuildAsync(calendar.Token, default);
+        Assert.Equal(3, writes.Count);
+        var ok = Assert.Single((await _calendars.GetAsync(_owner, calendar.Id))!.Sources);
+        Assert.Null(ok.LastError);
+    }
+
+    private sealed class CountingSaves : SaveChangesInterceptor
+    {
+        public int Count;
+
+        public override ValueTask<int> SavedChangesAsync(SaveChangesCompletedEventData eventData, int result, CancellationToken ct = default)
+        {
+            if (result > 0) Interlocked.Increment(ref Count);
+            return ValueTask.FromResult(result);
+        }
+    }
+
+    private sealed class InterceptingFactory(TestDb inner, IInterceptor interceptor) : IDbContextFactory<ApplicationDbContext>
+    {
+        public ApplicationDbContext CreateDbContext()
+        {
+            using var probe = inner.CreateDbContext();
+            return new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>()
+                .UseSqlite(probe.Database.GetDbConnection())
+                .UseApplicationServiceProvider(DesignTimeDbContextFactory.IdentitySchemaServices())
+                .AddInterceptors(interceptor)
+                .Options);
+        }
+    }
+
     private sealed class FailingOnSaveFactory(TestDb inner) : IDbContextFactory<ApplicationDbContext>
     {
         public ApplicationDbContext CreateDbContext()
