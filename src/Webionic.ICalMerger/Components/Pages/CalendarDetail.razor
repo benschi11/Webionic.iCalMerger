@@ -84,7 +84,6 @@ else
             var source = sources[i];
             var index = i;
             var line = StatusText.Source(source, now);
-            var css = StatusText.Css(line.Status);
 
             <div class="src @(line.Status == SourceStatus.Error ? "bad" : line.Status == SourceStatus.Stale ? "stale" : null)">
                 @if (editingId == source.Id)
@@ -118,14 +117,14 @@ else
                         <button type="button" class="icon-btn" aria-label="@source.Name nach oben" disabled="@(index == 0 || busy)" @onclick="() => MoveAsync(source.Id, -1)"><Icon Name="up" /></button>
                         <button type="button" class="icon-btn" aria-label="@source.Name nach unten" disabled="@(index == sources.Count - 1 || busy)" @onclick="() => MoveAsync(source.Id, 1)"><Icon Name="down" /></button>
                         <button type="button" class="icon-btn" aria-label="@source.Name bearbeiten" @onclick="() => StartEdit(source)"><Icon Name="edit" /></button>
-                        <button type="button" class="icon-btn" aria-label="@source.Name entfernen" disabled="@busy" @onclick="() => DeleteSourceAsync(source.Id)"><Icon Name="trash" /></button>
+                        <button type="button" class="icon-btn" aria-label="@source.Name entfernen" disabled="@busy" @onclick="() => AskDeleteSource(source)"><Icon Name="trash" /></button>
                     </div>
                     <div class="src-more">
                         <MoreMenu Label="@($"Aktionen für {source.Name}")">
                             <button type="button" role="menuitem" disabled="@(index == 0 || busy)" @onclick="() => MoveAsync(source.Id, -1)">Nach oben</button>
                             <button type="button" role="menuitem" disabled="@(index == sources.Count - 1 || busy)" @onclick="() => MoveAsync(source.Id, 1)">Nach unten</button>
                             <button type="button" role="menuitem" @onclick="() => StartEdit(source)">Bearbeiten</button>
-                            <button type="button" role="menuitem" class="danger" disabled="@busy" @onclick="() => DeleteSourceAsync(source.Id)">Entfernen</button>
+                            <button type="button" role="menuitem" class="danger" disabled="@busy" @onclick="() => AskDeleteSource(source)">Entfernen</button>
                         </MoreMenu>
                     </div>
                 }
@@ -157,6 +156,13 @@ else
             Die bisherige Adresse funktioniert sofort nicht mehr. Alle, die den Kalender abonniert haben, müssen die neue Adresse eintragen.
         </ConfirmDialog>
     }
+    else if (pending == Pending.DeleteSource)
+    {
+        <ConfirmDialog Title="@($"Quelle „{pendingSourceName}“ entfernen?")" ConfirmText="Quelle entfernen" Busy="busy"
+                       OnConfirm="() => DeleteSourceAsync(pendingSourceId)" OnCancel="CloseDialog">
+            Die Termine dieser Quelle verschwinden beim nächsten Abruf aus dem Feed. Die Adresse der Quelle wird nicht aufbewahrt.
+        </ConfirmDialog>
+    }
     else if (pending == Pending.DeleteCalendar)
     {
         <ConfirmDialog Title="@($"Kalender „{calendar.Name}“ löschen?")" ConfirmText="Kalender löschen" Busy="busy"
@@ -167,7 +173,7 @@ else
 }
 
 @code {
-    private enum Pending { None, Regenerate, DeleteCalendar }
+    private enum Pending { None, Regenerate, DeleteCalendar, DeleteSource }
 
     [Parameter]
     public int Id { get; set; }
@@ -181,6 +187,8 @@ else
     private string? error;
     private string? info;
     private Pending pending;
+    private int pendingSourceId;
+    private string pendingSourceName = "";
     private bool renaming;
     private string renameValue = "";
     private int? editingId;
@@ -259,6 +267,13 @@ else
         await Calendars.UpdateSourceAsync(ownerId, sourceId, editName, editUrl);
         editingId = null;
     }, "Quelle gespeichert.");
+
+    private void AskDeleteSource(CalendarSource source)
+    {
+        pendingSourceId = source.Id;
+        pendingSourceName = source.Name;
+        pending = Pending.DeleteSource;
+    }
 
     private Task DeleteSourceAsync(int sourceId) => RunAsync(() => Calendars.DeleteSourceAsync(ownerId, sourceId), "Quelle entfernt.");
 
