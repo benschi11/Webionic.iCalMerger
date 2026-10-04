@@ -97,6 +97,17 @@ public sealed class UserAdminServiceTests : IDisposable
         Assert.True(result.Item2);
     }
 
+    [Theory]
+    [InlineData("o'neil@example.com")]
+    [InlineData("anna.müller@example.com")]
+    public async Task Invite_AcceptsEmailsWithApostropheOrUmlaut(string email)
+    {
+        var link = await _admin.InviteAsync(email, BaseUri, Actor);
+
+        Assert.StartsWith("https://cal.example.com/Account/ResetPassword?code=", link);
+        Assert.NotNull(await WithUsersAsync(users => users.FindByEmailAsync(email)));
+    }
+
     [Fact]
     public async Task Invite_LinkWorksOnlyOnce()
     {

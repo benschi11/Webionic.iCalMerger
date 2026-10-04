@@ -12,6 +12,8 @@ public static class IdentityRegistration
             {
                 options.SignIn.RequireConfirmedAccount = false;
                 options.User.RequireUniqueEmail = true;
+                // Der Benutzername ist die bereits geprüfte E-Mail-Adresse, Zeichenbeschränkungen würden z. B. o'neil@... ablehnen.
+                options.User.AllowedUserNameCharacters = "";
                 options.Password.RequiredLength = 10;
                 options.Password.RequireDigit = false;
                 options.Password.RequireLowercase = false;
@@ -24,6 +26,7 @@ public static class IdentityRegistration
             .AddRoles<IdentityRole>()
             .AddEntityFrameworkStores<ApplicationDbContext>()
             .AddSignInManager()
+            .AddErrorDescriber<GermanIdentityErrorDescriber>()
             .AddDefaultTokenProviders();
 
         // Einladungs- und Reset-Links sind 7 Tage gültig.
