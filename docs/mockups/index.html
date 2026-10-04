@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>iCal Merger – Mockups</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy-950:#081e35;--navy-900:#0f3458;--navy-800:#17476f;--navy-700:#245b86;
+  --navy-300:#9db6cf;--navy-100:#dde7f1;--navy-50:#eff4f9;
+  --honey-500:#f5a623;--honey-400:#f8bb4f;--honey-200:#fde3b0;--honey-100:#fff1d4;
+  --ink:#0c2238;--muted:#4a6076;--line:#d9e3ed;--ground:#f4f7fb;--white:#fff;
+  --err:#a6261d;--err-bg:#fdecea;
+  --shadow-soft:0 1px 2px rgb(8 20 35/.06),0 12px 32px -12px rgb(8 20 35/.2);
+  --display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --body:"Hanken Grotesk",ui-sans-serif,system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+::selection{background:var(--honey-200);color:var(--navy-950)}
+body{margin:0;background:#e6edf5;color:var(--ink);font:400 16px/1.5 var(--body)}
+.sheet{max-width:1320px;margin:0 auto;padding:40px 24px 80px}
+.sheet>h1{font:700 1.75rem/1.1 var(--display);letter-spacing:-.02em;color:var(--navy-900);margin:0 0 4px}
+.sheet>p.note{margin:0 0 40px;color:var(--muted);max-width:70ch}
+.frame-label{font:600 .875rem var(--body);color:var(--navy-900);margin:48px 0 12px}
+.row{display:flex;gap:32px;align-items:flex-start;flex-wrap:wrap}
+
+/* app frame */
+.app{background:var(--ground);border-radius:20px;overflow:hidden;box-shadow:var(--shadow-soft);border:1px solid var(--line);flex:1 1 880px;min-width:0}
+.app.mobile{flex:0 0 390px;width:390px}
+.topbar{background:var(--white);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:24px;padding:0 32px;height:68px}
+.topbar img{height:30px;display:block}
+.topbar nav{display:flex;gap:4px;margin-left:8px}
+.topbar nav a{padding:8px 14px;border-radius:9999px;font-weight:600;font-size:.9375rem;color:var(--navy-900);text-decoration:none}
+.topbar nav a[aria-current]{background:var(--navy-50)}
+.topbar .who{margin-left:auto;color:var(--muted);font-size:.875rem;display:flex;align-items:center;gap:12px}
+.app.mobile .topbar{padding:0 16px;gap:12px}
+.app.mobile .topbar nav,.app.mobile .topbar .who span{display:none}
+.burger{display:none;width:44px;height:44px;border:0;background:var(--navy-50);border-radius:12px;color:var(--navy-900);place-items:center}
+.app.mobile .burger{display:grid;margin-left:auto}
+.main{padding:40px 32px 48px}
+.app.mobile .main{padding:24px 16px 32px}
+
+h2.page{font:700 2rem/1.1 var(--display);letter-spacing:-.02em;color:var(--navy-900);margin:0}
+.app.mobile h2.page{font-size:1.625rem}
+.pagehead{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:28px;flex-wrap:wrap}
+.sub{color:var(--muted);font-size:.9375rem;margin:6px 0 0}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 22px;border-radius:9999px;border:0;font:600 .9375rem var(--body);cursor:pointer;text-decoration:none;white-space:nowrap}
+.btn-primary{background:var(--honey-500);color:var(--navy-950)}
+.btn-primary:hover{background:var(--honey-400)}
+.btn-navy{background:var(--navy-900);color:#fff}
+.btn-navy:hover{background:var(--navy-800)}
+.btn-quiet{background:transparent;color:var(--navy-900);box-shadow:inset 0 0 0 1.5px var(--navy-300)}
+.btn-quiet:hover{background:var(--navy-50)}
+.btn-danger{background:transparent;color:var(--err);box-shadow:inset 0 0 0 1.5px #e3b3ae}
+.btn-sm{height:36px;padding:0 16px;font-size:.875rem}
+.btn:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(--honey-500);outline-offset:2px}
+svg.i{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+/* hex status */
+.hex{width:22px;height:19px;clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);display:inline-block;flex:none;position:relative}
+.hex.ok{background:var(--navy-900)}
+.hex.warn{background:var(--honey-500)}
+.hex.err{background:var(--err)}
+.hex.off{background:var(--navy-300)}
+.hexrow{display:flex;gap:3px}
+.hexrow .hex{width:16px;height:14px}
+
+/* calendar list */
+.cals{display:grid;gap:12px}
+.cal{background:var(--white);border:1px solid var(--line);border-radius:24px;padding:20px 24px;display:grid;grid-template-columns:auto 1fr auto auto;gap:20px;align-items:center;text-decoration:none;color:inherit}
+.cal:hover{box-shadow:var(--shadow-soft);border-color:var(--navy-100)}
+.cal h3{font:700 1.25rem/1.3 var(--display);letter-spacing:-.02em;margin:0;color:var(--navy-900)}
+.cal .meta{color:var(--muted);font-size:.875rem;margin-top:2px}
+.cal.problem{border-color:#efc4c0;background:linear-gradient(0deg,#fff,#fff)}
+.cal .state{font-weight:600;font-size:.875rem;display:flex;align-items:center;gap:8px;white-space:nowrap}
+.state.err{color:var(--err)}
+.state.ok{color:var(--navy-900)}
+.state.warn{color:#7a4d00}
+.cal .url{font:500 .8125rem ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);background:var(--navy-50);padding:6px 10px;border-radius:9px}
+.limit{margin-top:20px;color:var(--muted);font-size:.875rem}
+.app.mobile .cal{grid-template-columns:auto 1fr;padding:16px}
+.app.mobile .cal .url,.app.mobile .cal .chev{display:none}
+.app.mobile .cal .state{grid-column:2}
+
+/* detail */
+.back{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-weight:600;font-size:.875rem;text-decoration:none;margin-bottom:12px}
+.panel{background:var(--white);border:1px solid var(--line);border-radius:24px;padding:28px}
+.app.mobile .panel{padding:18px;border-radius:20px}
+.feed{background:var(--navy-950);color:var(--navy-100);border-radius:24px;padding:24px 28px;margin-bottom:20px;position:relative;overflow:hidden}
+.feed h3{font:700 1.25rem var(--display);letter-spacing:-.02em;margin:0 0 4px;color:#fff}
+.feed p{margin:0 0 16px;color:var(--navy-300);font-size:.9375rem}
+.feedbox{display:flex;gap:12px;align-items:center;background:rgb(255 255 255/.07);border-radius:16px;padding:8px 8px 8px 18px}
+.feedbox code{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:500 .9375rem ui-monospace,SFMono-Regular,Menlo,monospace;color:#fff}
+.app.mobile .feedbox{flex-direction:column;align-items:stretch;padding:14px}
+.app.mobile .feed{padding:20px}
+.feed .tools{display:flex;gap:16px;margin-top:14px;font-size:.875rem;color:var(--navy-300);align-items:center;flex-wrap:wrap}
+.feed .tools button{background:none;border:0;color:var(--honey-400);font:600 .875rem var(--body);cursor:pointer;padding:0;text-decoration:underline;text-underline-offset:3px}
+.sources h3,.sec-h{font:700 1.25rem var(--display);letter-spacing:-.02em;color:var(--navy-900);margin:0}
+.sec-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:12px}
+.sec-sub{color:var(--muted);font-size:.875rem;margin:0 0 16px}
+.src{display:grid;grid-template-columns:28px 22px 1fr auto auto;gap:14px;align-items:center;padding:14px 0;border-top:1px solid var(--line)}
+.src:first-of-type{border-top:0}
+.src .rank{font:700 .9375rem var(--display);color:var(--navy-700);text-align:center}
+.src .name{font-weight:600}
+.src .u{color:var(--muted);font-size:.8125rem;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.src .st{font-size:.8125rem;color:var(--muted);text-align:right}
+.src.bad{background:var(--err-bg);margin:0 -16px;padding:14px 16px;border-radius:16px;border-top-color:transparent}
+.src.bad .st{color:var(--err);font-weight:600}
+.src.stale{background:var(--honey-100);margin:0 -16px;padding:14px 16px;border-radius:16px;border-top-color:transparent}
+.src.stale+.src{border-top-color:transparent}
+.src.stale .st,.src.stale .mst{color:#6b4300;font-weight:600}
+.src.bad+.src{border-top-color:transparent}
+.src .acts{display:flex;gap:2px}
+.icon-btn{width:36px;height:36px;border-radius:10px;border:0;background:transparent;color:var(--navy-700);display:grid;place-items:center;cursor:pointer}
+.icon-btn:hover{background:var(--navy-50)}
+.app.mobile .src{grid-template-columns:22px 1fr auto}
+.app.mobile .src .rank,.app.mobile .src .st{display:none}
+.app.mobile .src .mst{display:block}
+.mst{display:none;font-size:.8125rem;color:var(--muted)}
+.src.bad .mst{color:var(--err);font-weight:600}
+.add{display:grid;grid-template-columns:1fr 2fr auto;gap:12px;margin-top:18px;padding-top:20px;border-top:1px solid var(--line)}
+.app.mobile .add{grid-template-columns:1fr}
+input.f{height:48px;border-radius:12px;border:1.5px solid var(--navy-300);padding:0 14px;font:400 1rem var(--body);color:var(--ink);background:#fff;width:100%}
+input.f::placeholder{color:var(--muted)}
+.danger-zone{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-top:20px;flex-wrap:wrap}
+.danger-zone p{margin:0;color:var(--muted);font-size:.875rem}
+
+/* admin table */
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-weight:600;font-size:.8125rem;color:var(--muted);padding:0 12px 10px;border-bottom:1px solid var(--line)}
+td{padding:14px 12px;border-bottom:1px solid var(--line);vertical-align:middle;font-size:.9375rem}
+tr:last-child td{border-bottom:0}
+td.num{font-variant-numeric:tabular-nums}
+.chip{display:inline-flex;align-items:center;gap:6px;border-radius:9999px;padding:3px 12px;font-weight:600;font-size:.8125rem}
+.chip.admin{background:var(--navy-900);color:#fff}
+.chip.user{background:var(--navy-50);color:var(--navy-900)}
+.chip.invited{background:var(--honey-100);color:#6b4300}
+.chip.locked{background:var(--err-bg);color:var(--err)}
+.invite{background:var(--honey-100);border-radius:20px;padding:18px 22px;margin-bottom:20px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.invite strong{font-weight:700}
+.invite code{flex:1 1 320px;min-width:0;background:#fff;border-radius:12px;padding:10px 14px;font:500 .875rem ui-monospace,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.invite p{margin:0;flex:1 1 100%;color:#6b4300;font-size:.875rem}
+.muted{color:var(--muted)}
+.kebab{margin-left:auto}
+
+/* confirm dialog */
+.scrim{background:rgb(8 30 53/.55);padding:48px 24px;display:grid;place-items:center;border-radius:20px}
+.dialog{background:#fff;border-radius:24px;padding:28px;max-width:440px;box-shadow:var(--shadow-soft)}
+.dialog h3{font:700 1.375rem var(--display);letter-spacing:-.02em;margin:0 0 8px;color:var(--navy-900)}
+.dialog p{margin:0 0 20px;color:var(--ink)}
+.dialog .btns{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+.btn-err{background:var(--err);color:#fff}
+.stack{display:flex;flex-direction:column;gap:32px;flex:1 1 380px;min-width:0}
+.legend{display:flex;gap:20px;flex-wrap:wrap;color:var(--muted);font-size:.875rem;margin-top:16px;align-items:center}
+.legend span{display:inline-flex;gap:8px;align-items:center}
+@media (max-width:760px){.app{flex-basis:100%}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></symbol>
+  </defs>
+</svg>
+
+<div class="sheet">
+  <h1>iCal Merger – Interface-Mockups</h1>
+  <p class="note">Statische Entwürfe im Webionic-System (Navy, Honig-Amber, Bricolage Grotesque / Hanken Grotesk, Sechseck als Statuszeichen). Alle Namen, URLs und Zahlen sind <strong>synthetische Beispieldaten</strong>.</p>
+
+  <!-- 1 Kalenderübersicht -->
+  <div class="frame-label">1 · Kalenderübersicht <span class="muted">(<code>/</code>)</span></div>
+  <div class="row">
+    <div class="app">
+      <header class="topbar">
+        <img src="logo-new-light.svg" alt="Webionic">
+        <nav aria-label="Hauptnavigation"><a href="#" aria-current="page">Kalender</a><a href="#">Nutzer</a></nav>
+        <div class="who"><span>benedikt@example.test</span><a class="btn btn-quiet btn-sm" href="#">Abmelden</a></div>
+      </header>
+      <main class="main">
+        <div class="pagehead">
+          <div>
+            <h2 class="page">Meine Kalender</h2>
+            <p class="sub">3 von 10 Kalendern</p>
+          </div>
+          <a class="btn btn-primary" href="#"><svg class="i"><use href="#i-plus"/></svg>Neuer Kalender</a>
+        </div>
+        <div class="cals">
+          <a class="cal problem" href="#">
+            <span class="hex err" title="Fehler"></span>
+            <div><h3>Familie</h3><div class="meta">4 Quellen</div></div>
+            <div class="state err">1 Quelle fehlerhaft</div>
+            <svg class="i chev" style="color:var(--navy-300)"><use href="#i-chev"/></svg>
+          </a>
+          <a class="cal" href="#">
+            <span class="hex ok" title="Alles in Ordnung"></span>
+            <div><h3>Verein Stammtisch</h3><div class="meta">2 Quellen</div></div>
+            <div class="state ok">Alle Quellen erreichbar</div>
+            <svg class="i chev" style="color:var(--navy-300)"><use href="#i-chev"/></svg>
+          </a>
+          <a class="cal" href="#">
+            <span class="hex warn" title="Veraltet"></span>
+            <div><h3>Schule &amp; Hort</h3><div class="meta">3 Quellen</div></div>
+            <div class="state warn">Stand von vor 2 Std.</div>
+            <svg class="i chev" style="color:var(--navy-300)"><use href="#i-chev"/></svg>
+          </a>
+        </div>
+        <div class="legend" aria-label="Legende">
+          <span><i class="hex ok"></i>Alle Quellen erreichbar</span>
+          <span><i class="hex warn"></i>Quelle antwortet nicht, Stand vom Zwischenspeicher</span>
+          <span><i class="hex err"></i>Quelle nie erfolgreich abgerufen</span>
+        </div>
+      </main>
+    </div>
+
+    <!-- Mobile -->
+    <div class="app mobile">
+      <header class="topbar">
+        <img src="logo-new-light.svg" alt="Webionic">
+        <button class="burger" aria-label="Menü"><svg class="i"><use href="#i-menu"/></svg></button>
+      </header>
+      <main class="main">
+        <div class="pagehead">
+          <div><h2 class="page">Meine Kalender</h2><p class="sub">3 von 10 Kalendern</p></div>
+          <a class="btn btn-primary" href="#" style="width:100%;justify-content:center"><svg class="i"><use href="#i-plus"/></svg>Neuer Kalender</a>
+        </div>
+        <div class="cals">
+          <a class="cal problem" href="#"><span class="hex err"></span><div><h3>Familie</h3><div class="meta">4 Quellen</div></div><div class="state err">1 Quelle fehlerhaft</div></a>
+          <a class="cal" href="#"><span class="hex ok"></span><div><h3>Verein Stammtisch</h3><div class="meta">2 Quellen</div></div><div class="state ok">Alle erreichbar</div></a>
+          <a class="cal" href="#"><span class="hex warn"></span><div><h3>Schule &amp; Hort</h3><div class="meta">3 Quellen</div></div><div class="state warn">Stand von vor 2 Std.</div></a>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- 2 Detail -->
+  <div class="frame-label">2 · Kalenderdetail <span class="muted">(<code>/calendars/{id}</code>)</span></div>
+  <div class="row">
+    <div class="app">
+      <header class="topbar">
+        <img src="logo-new-light.svg" alt="Webionic">
+        <nav aria-label="Hauptnavigation"><a href="#" aria-current="page">Kalender</a><a href="#">Nutzer</a></nav>
+        <div class="who"><span>benedikt@example.test</span><a class="btn btn-quiet btn-sm" href="#">Abmelden</a></div>
+      </header>
+      <main class="main">
+        <a class="back" href="#"><svg class="i"><use href="#i-back"/></svg>Alle Kalender</a>
+        <div class="pagehead">
+          <div><h2 class="page">Familie</h2></div>
+          <a class="btn btn-quiet" href="#"><svg class="i"><use href="#i-edit"/></svg>Umbenennen</a>
+        </div>
+
+        <section class="feed" aria-labelledby="feedh">
+          <h3 id="feedh">Feed-Adresse</h3>
+          <p>Diese Adresse in der Kalender-App abonnieren. Wer sie kennt, sieht alle Termine.</p>
+          <div class="feedbox">
+            <code>https://kalender.example.test/feed/q7Xk2mPz9aVd4RtYw8LhN3bGcE6sUjF1oHiKxA5nBvM.ics</code>
+            <button class="btn btn-primary"><svg class="i"><use href="#i-copy"/></svg>Kopieren</button>
+          </div>
+          <div class="tools"><span>Zuletzt abgerufen: vor 3 Min.</span><button>Neue Adresse erzeugen</button></div>
+        </section>
+
+        <section class="panel sources" aria-labelledby="srch">
+          <div class="sec-head"><h3 id="srch">Quellen</h3><span class="muted" style="font-size:.875rem">4 von 20</span></div>
+          <p class="sec-sub">Bei doppelten Terminen gewinnt die Quelle weiter oben.</p>
+
+          <div class="src">
+            <span class="rank">1</span><span class="hex ok" title="OK"></span>
+            <div><div class="name">Mama – Privat</div><div class="u">calendar.google.com/…/basic.ics</div><div class="mst">vor 3 Min. abgerufen</div></div>
+            <span class="st">vor 3 Min. abgerufen</span>
+            <div class="acts"><button class="icon-btn" aria-label="Nach oben" disabled style="opacity:.35"><svg class="i"><use href="#i-up"/></svg></button><button class="icon-btn" aria-label="Nach unten"><svg class="i"><use href="#i-down"/></svg></button><button class="icon-btn" aria-label="Bearbeiten"><svg class="i"><use href="#i-edit"/></svg></button><button class="icon-btn" aria-label="Löschen"><svg class="i"><use href="#i-trash"/></svg></button></div>
+          </div>
+          <div class="src">
+            <span class="rank">2</span><span class="hex ok"></span>
+            <div><div class="name">Papa – Arbeit</div><div class="u">outlook.office365.com/…/calendar.ics</div><div class="mst">vor 3 Min. abgerufen</div></div>
+            <span class="st">vor 3 Min. abgerufen</span>
+            <div class="acts"><button class="icon-btn" aria-label="Nach oben"><svg class="i"><use href="#i-up"/></svg></button><button class="icon-btn" aria-label="Nach unten"><svg class="i"><use href="#i-down"/></svg></button><button class="icon-btn" aria-label="Bearbeiten"><svg class="i"><use href="#i-edit"/></svg></button><button class="icon-btn" aria-label="Löschen"><svg class="i"><use href="#i-trash"/></svg></button></div>
+          </div>
+          <div class="src stale">
+            <span class="rank">3</span><span class="hex warn" title="Veraltet"></span>
+            <div><div class="name">Fußballverein</div><div class="u">sportverein.example.test/…/termine.ics</div><div class="mst">Nicht erreichbar (Zeitüberschreitung)</div></div>
+            <span class="st">Nicht erreichbar (Zeitüberschreitung)<br><span style="font-weight:400">Letzter Erfolg: vor 20 Std.</span></span>
+            <div class="acts"><button class="icon-btn" aria-label="Nach oben"><svg class="i"><use href="#i-up"/></svg></button><button class="icon-btn" aria-label="Nach unten"><svg class="i"><use href="#i-down"/></svg></button><button class="icon-btn" aria-label="Bearbeiten"><svg class="i"><use href="#i-edit"/></svg></button><button class="icon-btn" aria-label="Löschen"><svg class="i"><use href="#i-trash"/></svg></button></div>
+          </div>
+          <div class="src bad">
+            <span class="rank">4</span><span class="hex err" title="Fehler"></span>
+            <div><div class="name">Müllabfuhr</div><div class="u">gemeinde.example.test/…/abfall.ics</div><div class="mst">Kein gültiger Kalender (HTML erhalten)</div></div>
+            <span class="st">Kein gültiger Kalender (HTML erhalten)<br><span style="font-weight:400">Noch nie erfolgreich abgerufen</span></span>
+            <div class="acts"><button class="icon-btn" aria-label="Nach oben"><svg class="i"><use href="#i-up"/></svg></button><button class="icon-btn" aria-label="Nach unten" disabled style="opacity:.35"><svg class="i"><use href="#i-down"/></svg></button><button class="icon-btn" aria-label="Bearbeiten"><svg class="i"><use href="#i-edit"/></svg></button><button class="icon-btn" aria-label="Löschen"><svg class="i"><use href="#i-trash"/></svg></button></div>
+          </div>
+
+          <form class="add" onsubmit="return false">
+            <input class="f" placeholder="Name" aria-label="Name der Quelle">
+            <input class="f" placeholder="https://… oder webcal://…" aria-label="iCal-Adresse">
+            <button class="btn btn-navy"><svg class="i"><use href="#i-plus"/></svg>Quelle hinzufügen</button>
+          </form>
+        </section>
+
+        <div class="danger-zone">
+          <p>Der Kalender und seine Feed-Adresse werden unwiderruflich gelöscht.</p>
+          <button class="btn btn-danger">Kalender löschen</button>
+        </div>
+      </main>
+    </div>
+
+    <div class="stack">
+      <div class="app mobile">
+        <header class="topbar"><img src="logo-new-light.svg" alt="Webionic"><button class="burger" aria-label="Menü"><svg class="i"><use href="#i-menu"/></svg></button></header>
+        <main class="main">
+          <a class="back" href="#"><svg class="i"><use href="#i-back"/></svg>Alle Kalender</a>
+          <div class="pagehead"><h2 class="page">Familie</h2></div>
+          <section class="feed">
+            <h3>Feed-Adresse</h3>
+            <p>In der Kalender-App abonnieren.</p>
+            <div class="feedbox"><code>https://kalender.example.test/feed/q7Xk2mPz9a…ic</code><button class="btn btn-primary" style="justify-content:center"><svg class="i"><use href="#i-copy"/></svg>Kopieren</button></div>
+            <div class="tools"><span>Vor 3 Min. abgerufen</span><button>Neue Adresse erzeugen</button></div>
+          </section>
+          <section class="panel sources">
+            <div class="sec-head"><h3>Quellen</h3><span class="muted" style="font-size:.875rem">4 von 20</span></div>
+            <div class="src stale"><span class="hex warn"></span><div><div class="name">Fußballverein</div><div class="mst">Nicht erreichbar (Zeitüberschreitung)</div></div><button class="icon-btn" aria-label="Mehr"><svg class="i"><use href="#i-more"/></svg></button></div>
+            <div class="src"><span class="hex ok"></span><div><div class="name">Mama – Privat</div><div class="mst">vor 3 Min. abgerufen</div></div><button class="icon-btn" aria-label="Mehr"><svg class="i"><use href="#i-more"/></svg></button></div>
+            <div class="src"><span class="hex ok"></span><div><div class="name">Papa – Arbeit</div><div class="mst">vor 3 Min. abgerufen</div></div><button class="icon-btn" aria-label="Mehr"><svg class="i"><use href="#i-more"/></svg></button></div>
+          </section>
+        </main>
+      </div>
+
+      <div class="scrim" aria-label="Bestätigungsdialog (Beispiel)">
+        <div class="dialog" role="alertdialog" aria-labelledby="dh">
+          <h3 id="dh">Neue Feed-Adresse erzeugen?</h3>
+          <p>Die bisherige Adresse funktioniert sofort nicht mehr. Alle, die den Kalender abonniert haben, müssen die neue Adresse eintragen.</p>
+          <div class="btns"><button class="btn btn-quiet">Abbrechen</button><button class="btn btn-err">Neue Adresse erzeugen</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3 Admin -->
+  <div class="frame-label">3 · Nutzerverwaltung <span class="muted">(<code>/admin/users</code>, nur Admin)</span></div>
+  <div class="row">
+    <div class="app">
+      <header class="topbar">
+        <img src="logo-new-light.svg" alt="Webionic">
+        <nav aria-label="Hauptnavigation"><a href="#">Kalender</a><a href="#" aria-current="page">Nutzer</a></nav>
+        <div class="who"><span>benedikt@example.test</span><a class="btn btn-quiet btn-sm" href="#">Abmelden</a></div>
+      </header>
+      <main class="main">
+        <div class="pagehead">
+          <div><h2 class="page">Nutzer</h2><p class="sub">4 Konten</p></div>
+          <a class="btn btn-primary" href="#"><svg class="i"><use href="#i-plus"/></svg>Nutzer einladen</a>
+        </div>
+
+        <div class="invite" role="status">
+          <strong>Einladung für anna@example.test erstellt.</strong>
+          <code>https://kalender.example.test/Account/ResetPassword?code=Q2ZtT3Vy…xYw</code>
+          <button class="btn btn-navy"><svg class="i"><use href="#i-copy"/></svg>Link kopieren</button>
+          <p>Einmaliger Link, 7 Tage gültig. Er wird nur jetzt angezeigt. Gib ihn selbst weiter, es wird keine E-Mail versendet.</p>
+        </div>
+
+        <section class="panel" style="padding:20px 16px">
+          <table>
+            <thead><tr><th>E-Mail</th><th>Status</th><th>Kalender</th><th></th></tr></thead>
+            <tbody>
+              <tr><td><strong>benedikt@example.test</strong><div class="muted" style="font-size:.8125rem">Das bist du</div></td><td><span class="chip admin">Admin</span></td><td class="num">3</td><td></td></tr>
+              <tr><td>anna@example.test</td><td><span class="chip invited">Eingeladen</span></td><td class="num">0</td><td><div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn btn-quiet btn-sm">Neuer Link</button><button class="icon-btn" aria-label="Mehr"><svg class="i"><use href="#i-more"/></svg></button></div></td></tr>
+              <tr><td>clemens@example.test</td><td><span class="chip user">Nutzer</span></td><td class="num">2</td><td><div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn btn-quiet btn-sm">Passwort-Link</button><button class="icon-btn" aria-label="Mehr"><svg class="i"><use href="#i-more"/></svg></button></div></td></tr>
+              <tr><td class="muted">lisa@example.test</td><td><span class="chip locked">Gesperrt</span></td><td class="num">1</td><td><div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn btn-quiet btn-sm">Entsperren</button><button class="icon-btn" aria-label="Mehr"><svg class="i"><use href="#i-more"/></svg></button></div></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <p class="limit">Im Menü „Mehr“: Zum Admin machen / Admin entziehen, Sperren, Löschen. Der letzte Admin kann nicht entfernt werden.</p>
+      </main>
+    </div>
+  </div>
+</div>
+</body>
+</html>

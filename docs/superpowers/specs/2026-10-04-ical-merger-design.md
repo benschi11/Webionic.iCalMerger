@@ -160,7 +160,16 @@ geloggt und in der UI standardmäßig gekürzt angezeigt (Host + Anfang).
 - Die Feed-URL wird aus dem Request-Host gebildet (`https://<host>/feed/<token>.ics`).
   Hinter dem Dokploy-Proxy müssen dafür `X-Forwarded-*`-Header ausgewertet
   werden (`ForwardedHeadersOptions`).
-- Texte auf Deutsch, schlichtes responsives Layout (Bootstrap aus der Vorlage).
+- Status je Quelle in vier Stufen, abgeleitet aus `LastSuccessAt`/`LastError`: in Ordnung, Zwischenspeicher
+  (Fehler, aber früher erfolgreich: der Feed liefert die letzten Daten), Fehler (nie erfolgreich), noch nicht
+  abgerufen. Die Kalenderliste zeigt den schlechtesten Status der Quellen. Fehler sind rot, nicht dekorativ.
+- Bestätigungsdialoge mit Folgetext für „Neue Feed-Adresse erzeugen“, „Kalender löschen“ und „Nutzer löschen“.
+- Admin-Seite mit Nutzertabelle (Rolle, Eingeladen/Gesperrt, Anzahl Kalender), Einladungslink in einem Hinweis,
+  der nur einmal angezeigt wird.
+- Texte auf Deutsch. Webionic-Theme (Navy, Honig-Amber, Bricolage Grotesque/Hanken Grotesk, Sechseck als
+  Statuszeichen) mit Tailwind CSS v4 (Standalone-CLI, kein Node, kein Bootstrap): Tokens und Komponentenklassen in
+  `Styles/app.css`, erzeugte Ausgabe `wwwroot/css/app.css` (eingecheckt). Handybreite ist
+  vollwertig unterstützt (Quellen als kompakte Zeilen, Nutzerliste als Blöcke). Vorlage: `docs/mockups/index.html`.
 
 ## Fehlerbehandlung
 
