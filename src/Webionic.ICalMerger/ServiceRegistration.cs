@@ -1,4 +1,5 @@
 using Webionic.ICalMerger.Calendars;
+using Webionic.ICalMerger.Feed;
 using Webionic.ICalMerger.Fetching;
 
 namespace Webionic.ICalMerger;
@@ -20,6 +21,10 @@ public static class ServiceRegistration
 
         services.Configure<AppLimits>(configuration.GetSection("Limits"));
         services.AddScoped<CalendarService>();
+
+        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<ISourceCache, SourceCache>();
+        services.AddScoped<FeedService>();
 
         return services;
     }
