@@ -187,10 +187,11 @@
 
   /* Quellenliste */
   .src { display: grid; grid-template-columns: 28px 22px 1fr minmax(0, 18rem) auto; gap: 14px; align-items: center; padding: 14px 0; border-top: 1px solid var(--color-line); }
-  .src:first-of-type { border-top: 0; }
+  .sec-sub + .src { border-top: 0; }
   .src .rank { font: 700 .9375rem var(--font-display); color: var(--color-navy-700); text-align: center; }
   .src .name { font-weight: 600; overflow-wrap: anywhere; }
   .src .u { color: var(--color-muted); font-size: .8125rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+  .src .st, .src .mst { overflow-wrap: anywhere; }
   .src .st { font-size: .8125rem; color: var(--color-muted); text-align: right; }
   .src .detail { font-weight: 400; }
   .src .mst, .src .src-more { display: none; }

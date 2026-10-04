@@ -26,6 +26,8 @@ public static class ServiceRegistration
         services.AddSingleton<ISourceCache, SourceCache>();
         services.AddScoped<FeedService>();
 
+        services.AddScoped<Users.CurrentUser>();
+
         return services;
     }
 }

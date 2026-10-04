@@ -1,6 +1,152 @@
 @page "/"
 @attribute [Authorize]
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
 
-<PageTitle>iCal Merger</PageTitle>
+@inject CalendarService Calendars
+@inject CurrentUser User
+@inject IOptions<AppLimits> Limits
+@inject TimeProvider Time
 
-<h1>iCal Merger</h1>
+<PageTitle>Meine Kalender</PageTitle>
+
+<div class="pagehead">
+    <div>
+        <h1 class="page">Meine Kalender</h1>
+        @if (calendars is not null)
+        {
+            <p class="sub">
+                @if (AtLimit)
+                {
+                    <text>@calendars.Count von @Limits.Value.MaxCalendarsPerUser Kalendern, das Limit ist erreicht</text>
+                }
+                else
+                {
+                    <text>@calendars.Count von @Limits.Value.MaxCalendarsPerUser Kalendern</text>
+                }
+            </p>
+        }
+    </div>
+    <button type="button" class="btn btn-primary" @onclick="StartCreate" disabled="@(calendars is null || AtLimit)">
+        <Icon Name="plus" />Neuer Kalender
+    </button>
+</div>
+
+@if (error is not null)
+{
+    <div class="notice err" role="alert">@error</div>
+}
+
+@if (creating)
+{
+    <EditForm Model="form" OnValidSubmit="CreateAsync" FormName="create-calendar" class="panel create">
+        <label for="new-name" class="field-label">Name des Kalenders</label>
+        <div class="form-row">
+            <InputText @ref="nameInput" id="new-name" @bind-Value="form.Name" class="input" placeholder="z. B. Familie" maxlength="100" autocomplete="off" />
+            <button type="submit" class="btn btn-navy" disabled="@busy">Anlegen</button>
+            <button type="button" class="btn btn-quiet" @onclick="CancelCreate">Abbrechen</button>
+        </div>
+    </EditForm>
+}
+
+@if (calendars is null)
+{
+    <p class="text-muted">Lade …</p>
+}
+else if (calendars.Count == 0)
+{
+    @if (!creating)
+    {
+        <p class="text-muted">Noch kein Kalender. Lege deinen ersten mit „Neuer Kalender“ an.</p>
+    }
+}
+else
+{
+    var now = Time.GetUtcNow().UtcDateTime;
+    <div class="cals">
+        @foreach (var calendar in calendars)
+        {
+            var line = StatusText.Calendar(calendar.Sources, now);
+            <a class="cal @(line.Status == SourceStatus.Error ? "problem" : null)" href="calendars/@calendar.Id">
+                <StatusHex Status="line.Status" />
+                <div>
+                    <h2>@calendar.Name</h2>
+                    <div class="meta">@calendar.Sources.Count @(calendar.Sources.Count == 1 ? "Quelle" : "Quellen")</div>
+                </div>
+                <div class="state @StatusText.Css(line.Status)">@line.Text</div>
+                <span class="chev"><Icon Name="chev" /></span>
+            </a>
+        }
+    </div>
+    <ul class="legend" aria-label="Legende">
+        <li><span class="hex ok"></span>Alle Quellen erreichbar</li>
+        <li><span class="hex warn"></span>Zwischenspeicher, Quelle antwortet nicht</li>
+        <li><span class="hex err"></span>Quelle fehlerhaft</li>
+    </ul>
+}
+
+@code {
+    private List<MergedCalendar>? calendars;
+    private string ownerId = "";
+    private string? error;
+    private bool busy;
+    private bool creating;
+    private bool focusName;
+    private InputText? nameInput;
+    private readonly NameForm form = new();
+
+    private bool AtLimit => calendars is not null && calendars.Count >= Limits.Value.MaxCalendarsPerUser;
+
+    protected override async Task OnInitializedAsync()
+    {
+        ownerId = await User.GetIdAsync();
+        calendars = await Calendars.ListAsync(ownerId);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (focusName && nameInput?.Element is { } element)
+        {
+            focusName = false;
+            await element.FocusAsync();
+        }
+    }
+
+    private void StartCreate()
+    {
+        error = null;
+        creating = true;
+        focusName = true;
+    }
+
+    private void CancelCreate()
+    {
+        creating = false;
+        form.Name = "";
+    }
+
+    private async Task CreateAsync()
+    {
+        error = null;
+        busy = true;
+        try
+        {
+            await Calendars.CreateAsync(ownerId, form.Name);
+            form.Name = "";
+            creating = false;
+            calendars = await Calendars.ListAsync(ownerId);
+        }
+        catch (DomainException ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private sealed class NameForm
+    {
+        public string Name { get; set; } = "";
+    }
+}
