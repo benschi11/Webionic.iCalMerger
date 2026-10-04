@@ -48,6 +48,17 @@ public sealed class FeedEndpointTests : IDisposable
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
+    [Fact]
+    public async Task Feed_UnknownToken_IsNotCachedAndHasNoHtmlBody()
+    {
+        var response = await _factory.CreateClient().GetAsync(FeedPath(TokenGenerator.NewToken()));
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.True(response.Headers.CacheControl!.NoStore);
+        Assert.DoesNotContain("html", response.Content.Headers.ContentType?.MediaType ?? "", StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("<", await response.Content.ReadAsStringAsync());
+    }
+
     [Theory]
     [InlineData("x")]
     [InlineData("..")]
@@ -102,6 +113,10 @@ public sealed class FeedEndpointTests : IDisposable
         var response = await _factory.CreateClient().GetAsync(FeedPath(calendar.Token));
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.True(response.Headers.CacheControl!.NoStore);
+        Assert.Equal("60", response.Headers.GetValues("Retry-After").Single());
+        Assert.DoesNotContain("html", response.Content.Headers.ContentType?.MediaType ?? "", StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("<", await response.Content.ReadAsStringAsync());
     }
 
     [Fact]

@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Diagnostics;
+
 namespace Webionic.ICalMerger.Feed;
 
 public static class FeedEndpoint
@@ -12,18 +14,19 @@ public static class FeedEndpoint
             // Offensichtlichen Müll abweisen, bevor die Datenbank gefragt wird.
             if (token.Length is < MinTokenLength or > MaxTokenLength)
             {
-                return Results.NotFound();
+                return Failure(http, StatusCodes.Status404NotFound);
             }
 
             var result = await feed.BuildAsync(token, ct);
             if (result is null)
             {
-                return Results.NotFound();
+                return Failure(http, StatusCodes.Status404NotFound);
             }
 
             if (result.Ics is null)
             {
-                return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+                http.Response.Headers.RetryAfter = "60";
+                return Failure(http, StatusCodes.Status503ServiceUnavailable);
             }
 
             http.Response.Headers.CacheControl = "public, max-age=300";
@@ -38,5 +41,13 @@ public static class FeedEndpoint
         }).AllowAnonymous();
 
         return endpoints;
+    }
+
+    /// <summary>Fehlerantwort ohne Body und ohne Cache. Die HTML-Fehlerseite der App gehört nicht in einen Kalender-Feed.</summary>
+    private static IResult Failure(HttpContext http, int statusCode)
+    {
+        http.Features.Get<IStatusCodePagesFeature>()?.Enabled = false;
+        http.Response.Headers.CacheControl = "no-store";
+        return Results.StatusCode(statusCode);
     }
 }
