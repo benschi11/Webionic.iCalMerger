@@ -17,7 +17,7 @@
             <p class="sub">@users.Count @(users.Count == 1 ? "Konto" : "Konten")</p>
         }
     </div>
-    <button type="button" class="btn btn-primary" @onclick="StartInvite"><Icon Name="plus" />Nutzer einladen</button>
+    <button type="button" class="btn btn-primary" disabled="@sessionEnding" @onclick="StartInvite"><Icon Name="plus" />Nutzer einladen</button>
 </div>
 
 @if (error is not null)
@@ -52,7 +52,10 @@
     </div>
 }
 
-@if (users is null)
+@if (sessionEnding)
+{
+}
+else if (users is null)
 {
     <p class="text-muted">Lade …</p>
 }
@@ -159,6 +162,7 @@ else
     private string? error;
     private string? info;
     private bool busy;
+    private bool sessionEnding;
 
     // Die Basis für Links kommt aus App:PublicBaseUrl (falls gesetzt), sonst aus dieser Adresse.
     private string BaseUri => Navigation.BaseUri;
@@ -223,22 +227,22 @@ else
         pendingTitle = isMe ? "Dich selbst sperren?" : $"Nutzer {user.Email} sperren?";
         pendingConfirm = isMe ? "Mich sperren" : "Nutzer sperren";
         pendingText = isMe
-            ? "Du wirst sofort abgemeldet und kannst dich nicht mehr anmelden, bis ein anderer Admin dich entsperrt."
+            ? "Du wirst innerhalb einer Minute abgemeldet und kannst danach nichts mehr verwalten und dich nicht mehr anmelden, bis ein anderer Admin dich entsperrt."
             : "Der Nutzer wird abgemeldet und kann sich nicht mehr anmelden, bis du ihn entsperrst.";
     }
 
-    private void AskAdminChange(UserRow user, bool makeAdmin)
+    private Task AskAdminChange(UserRow user, bool makeAdmin)
     {
         if (user.Id != myId)
         {
-            _ = SetAdminAsync(user.Id, makeAdmin);
-            return;
+            return SetAdminAsync(user.Id, makeAdmin);
         }
 
         pending = new PendingAction(PendingKind.Demote, user);
         pendingTitle = "Dir selbst die Admin-Rolle entziehen?";
         pendingConfirm = "Admin-Rolle entziehen";
-        pendingText = "Du wirst sofort abgemeldet und verlierst den Zugriff auf die Nutzerverwaltung, bis dich ein anderer Admin wieder zum Admin macht.";
+        pendingText = "Du wirst innerhalb einer Minute abgemeldet und kannst danach nichts mehr verwalten, bis dich ein anderer Admin wieder zum Admin macht.";
+        return Task.CompletedTask;
     }
 
     private void CancelPending() => pending = null;
@@ -254,7 +258,7 @@ else
         };
     }
 
-    private async Task RunAsync(Func<Task> action, string? success = null)
+    private async Task RunAsync(Func<Task> action, string? success = null, bool endsSession = false)
     {
         error = null;
         info = null;
@@ -262,8 +266,19 @@ else
         try
         {
             await action();
-            await LoadAsync();
-            info = success;
+            if (endsSession)
+            {
+                // Nichts Veraltetes anzeigen: Die Sitzung endet gleich, die Liste verschwindet.
+                users = null;
+                link = null;
+                info = "Gespeichert. Deine Sitzung endet in Kürze, danach kannst du hier nichts mehr verwalten.";
+                sessionEnding = true;
+            }
+            else
+            {
+                await LoadAsync();
+                info = success;
+            }
         }
         catch (DomainException ex)
         {
@@ -294,10 +309,10 @@ else
     });
 
     private Task SetLockedAsync(string id, bool locked) =>
-        RunAsync(() => Admin.SetLockedAsync(id, locked, myId), locked ? "Nutzer gesperrt." : "Nutzer entsperrt.");
+        RunAsync(() => Admin.SetLockedAsync(id, locked, myId), locked ? "Nutzer gesperrt." : "Nutzer entsperrt.", endsSession: locked && id == myId);
 
     private Task SetAdminAsync(string id, bool isAdmin) =>
-        RunAsync(() => Admin.SetAdminAsync(id, isAdmin, myId), isAdmin ? "Nutzer ist jetzt Admin." : "Admin-Rolle entzogen.");
+        RunAsync(() => Admin.SetAdminAsync(id, isAdmin, myId), isAdmin ? "Nutzer ist jetzt Admin." : "Admin-Rolle entzogen.", endsSession: !isAdmin && id == myId);
 
     private async Task CopyLinkAsync()
     {
