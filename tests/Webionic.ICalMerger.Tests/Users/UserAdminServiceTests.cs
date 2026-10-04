@@ -1,0 +1,329 @@
+using System.Text;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using Webionic.ICalMerger.Calendars;
+using Webionic.ICalMerger.Data;
+using Webionic.ICalMerger.Users;
+
+namespace Webionic.ICalMerger.Tests.Users;
+
+public sealed class UserAdminServiceTests : IDisposable
+{
+    private const string Password = "correct horse battery";
+    private const string BaseUri = "https://cal.example.com/";
+
+    private readonly SqliteConnection _connection = new("DataSource=:memory:");
+    private readonly ServiceProvider _services;
+    private readonly UserAdminService _admin;
+
+    public UserAdminServiceTests()
+    {
+        _connection.Open();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddDataProtection();
+        services.AddDbContext<ApplicationDbContext>(o => o.UseSqlite(_connection));
+        services.AddAppIdentity();
+        services.AddSingleton<UserAdminService>();
+        _services = services.BuildServiceProvider();
+
+        using (var scope = _services.CreateScope())
+        {
+            scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().Database.EnsureCreated();
+        }
+
+        _admin = _services.GetRequiredService<UserAdminService>();
+    }
+
+    public void Dispose()
+    {
+        _services.Dispose();
+        _connection.Dispose();
+    }
+
+    private async Task<string> SeedAsync(string email, bool admin)
+    {
+        using var scope = _services.CreateScope();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var roles = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+        if (!await roles.RoleExistsAsync(Roles.Admin)) await roles.CreateAsync(new IdentityRole(Roles.Admin));
+
+        var user = new ApplicationUser { UserName = email, Email = email, EmailConfirmed = true };
+        Assert.True((await users.CreateAsync(user, Password)).Succeeded);
+        if (admin) Assert.True((await users.AddToRoleAsync(user, Roles.Admin)).Succeeded);
+        return user.Id;
+    }
+
+    private static string TokenFromLink(string link)
+    {
+        var code = link[(link.IndexOf("code=", StringComparison.Ordinal) + 5)..];
+        return Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(code));
+    }
+
+    private async Task<T> WithUsersAsync<T>(Func<UserManager<ApplicationUser>, Task<T>> action)
+    {
+        using var scope = _services.CreateScope();
+        return await action(scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>());
+    }
+
+    [Fact]
+    public async Task Invite_CreatesUserWithoutPassword_AndLinkSetsPassword()
+    {
+        var link = await _admin.InviteAsync("  neu@example.com ", BaseUri);
+
+        Assert.StartsWith("https://cal.example.com/Account/ResetPassword?code=", link);
+        var token = TokenFromLink(link);
+
+        var result = await WithUsersAsync(async users =>
+        {
+            var user = (await users.FindByEmailAsync("neu@example.com"))!;
+            Assert.False(await users.HasPasswordAsync(user));
+            var reset = await users.ResetPasswordAsync(user, token, "ein langes passwort");
+            return (reset.Succeeded, await users.CheckPasswordAsync(user, "ein langes passwort"));
+        });
+
+        Assert.True(result.Item1);
+        Assert.True(result.Item2);
+    }
+
+    [Fact]
+    public async Task Invite_LinkWorksOnlyOnce()
+    {
+        var token = TokenFromLink(await _admin.InviteAsync("neu@example.com", BaseUri));
+
+        var second = await WithUsersAsync(async users =>
+        {
+            var user = (await users.FindByEmailAsync("neu@example.com"))!;
+            Assert.True((await users.ResetPasswordAsync(user, token, "ein langes passwort")).Succeeded);
+            return await users.ResetPasswordAsync(user, token, "ein anderes passwort");
+        });
+
+        Assert.False(second.Succeeded);
+    }
+
+    [Fact]
+    public async Task Invite_RejectsDuplicateEmailIgnoringCase()
+    {
+        await _admin.InviteAsync("neu@example.com", BaseUri);
+
+        var ex = await Assert.ThrowsAsync<DomainException>(() => _admin.InviteAsync("Neu@Example.com", BaseUri));
+
+        Assert.Contains("bereits vergeben", ex.Message);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("kein-at-zeichen")]
+    public async Task Invite_RejectsInvalidEmail(string email)
+    {
+        await Assert.ThrowsAsync<DomainException>(() => _admin.InviteAsync(email, BaseUri));
+    }
+
+    [Fact]
+    public async Task ResetLink_ReplacesExistingPassword()
+    {
+        var id = await SeedAsync("alt@example.com", admin: false);
+
+        var token = TokenFromLink(await _admin.CreateResetLinkAsync(id, BaseUri));
+
+        var ok = await WithUsersAsync(async users =>
+        {
+            var user = (await users.FindByIdAsync(id))!;
+            Assert.True((await users.ResetPasswordAsync(user, token, "neues langes passwort")).Succeeded);
+            return (await users.CheckPasswordAsync(user, Password), await users.CheckPasswordAsync(user, "neues langes passwort"));
+        });
+
+        Assert.False(ok.Item1);
+        Assert.True(ok.Item2);
+    }
+
+    [Fact]
+    public async Task ResetLink_ForUnknownUser_Throws()
+    {
+        await Assert.ThrowsAsync<DomainException>(() => _admin.CreateResetLinkAsync("gibt-es-nicht", BaseUri));
+    }
+
+    [Fact]
+    public async Task Delete_Self_IsRejected()
+    {
+        var first = await SeedAsync("eins@example.com", admin: true);
+        await SeedAsync("zwei@example.com", admin: true);
+
+        await Assert.ThrowsAsync<DomainException>(() => _admin.DeleteAsync(first, actingUserId: first));
+    }
+
+    [Fact]
+    public async Task List_ReportsCalendarCountPerUser()
+    {
+        var withCalendars = await SeedAsync("a@example.com", admin: false);
+        await SeedAsync("b@example.com", admin: false);
+        using (var scope = _services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            db.Calendars.AddRange(
+                new MergedCalendar { OwnerId = withCalendars, Name = "Eins", Token = "token-eins" },
+                new MergedCalendar { OwnerId = withCalendars, Name = "Zwei", Token = "token-zwei" });
+            await db.SaveChangesAsync();
+        }
+
+        var rows = await _admin.ListAsync();
+
+        Assert.Equal(2, rows.Single(r => r.Id == withCalendars).CalendarCount);
+        Assert.Equal(0, rows.Single(r => r.Id != withCalendars).CalendarCount);
+    }
+
+    [Fact]
+    public async Task LastActiveAdmin_CannotBeDeletedLockedOrDemoted()
+    {
+        var onlyAdmin = await SeedAsync("admin@example.com", admin: true);
+        var other = await SeedAsync("user@example.com", admin: false);
+
+        await Assert.ThrowsAsync<DomainException>(() => _admin.DeleteAsync(onlyAdmin, actingUserId: other));
+        await Assert.ThrowsAsync<DomainException>(() => _admin.SetLockedAsync(onlyAdmin, true));
+        await Assert.ThrowsAsync<DomainException>(() => _admin.SetAdminAsync(onlyAdmin, false));
+
+        var rows = await _admin.ListAsync();
+        Assert.Contains(rows, r => r.Id == onlyAdmin && r.IsAdmin && !r.IsLockedOut);
+    }
+
+    [Fact]
+    public async Task WithSecondAdmin_FirstCanBeDemotedAndDeleted()
+    {
+        var first = await SeedAsync("eins@example.com", admin: true);
+        var second = await SeedAsync("zwei@example.com", admin: true);
+
+        await _admin.SetAdminAsync(first, false);
+        Assert.DoesNotContain(await _admin.ListAsync(), r => r.Id == first && r.IsAdmin);
+
+        await _admin.DeleteAsync(first, actingUserId: second);
+        Assert.DoesNotContain(await _admin.ListAsync(), r => r.Id == first);
+    }
+
+    [Fact]
+    public async Task LockedAdmin_DoesNotCountAsActive()
+    {
+        var first = await SeedAsync("eins@example.com", admin: true);
+        var second = await SeedAsync("zwei@example.com", admin: true);
+        await _admin.SetLockedAsync(first, true);
+
+        await Assert.ThrowsAsync<DomainException>(() => _admin.SetAdminAsync(second, false));
+    }
+
+    [Fact]
+    public async Task SetLocked_LocksAndUnlocks()
+    {
+        var id = await SeedAsync("user@example.com", admin: false);
+
+        await _admin.SetLockedAsync(id, true);
+        Assert.True((await _admin.ListAsync()).Single().IsLockedOut);
+
+        await _admin.SetLockedAsync(id, false);
+        Assert.False((await _admin.ListAsync()).Single().IsLockedOut);
+    }
+
+    [Fact]
+    public async Task Delete_RemovesUsersCalendarsViaCascade()
+    {
+        var owner = await SeedAsync("owner@example.com", admin: false);
+        var actor = await SeedAsync("admin@example.com", admin: true);
+        using (var scope = _services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            db.Calendars.Add(new MergedCalendar
+            {
+                OwnerId = owner,
+                Name = "K",
+                Token = TokenGenerator.NewToken(),
+                CreatedAt = DateTime.UtcNow,
+                Sources = [new CalendarSource { Name = "A", Url = "https://example.com/a.ics" }],
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await _admin.DeleteAsync(owner, actingUserId: actor);
+
+        using var check = _services.CreateScope();
+        var checkDb = check.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        Assert.Equal(0, await checkDb.Calendars.CountAsync());
+        Assert.Equal(0, await checkDb.Sources.CountAsync());
+    }
+
+    [Fact]
+    public async Task List_ShowsRoleLockAndPasswordStatus()
+    {
+        await SeedAsync("admin@example.com", admin: true);
+        await _admin.InviteAsync("neu@example.com", BaseUri);
+
+        var rows = await _admin.ListAsync();
+
+        var admin = rows.Single(r => r.Email == "admin@example.com");
+        var invited = rows.Single(r => r.Email == "neu@example.com");
+        Assert.True(admin.IsAdmin);
+        Assert.True(admin.HasPassword);
+        Assert.False(invited.IsAdmin);
+        Assert.False(invited.HasPassword);
+    }
+
+    [Fact]
+    public void IdentityOptions_RequireTenCharactersAndSevenDayTokens()
+    {
+        var password = _services.GetRequiredService<IOptions<IdentityOptions>>().Value.Password;
+        var tokens = _services.GetRequiredService<IOptions<DataProtectionTokenProviderOptions>>().Value;
+
+        Assert.Equal(10, password.RequiredLength);
+        Assert.Equal(TimeSpan.FromDays(7), tokens.TokenLifespan);
+    }
+
+    [Fact]
+    public async Task ShortPassword_IsRejected()
+    {
+        using var scope = _services.CreateScope();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+
+        var result = await users.CreateAsync(new ApplicationUser { UserName = "x@example.com", Email = "x@example.com" }, "kurz");
+
+        Assert.False(result.Succeeded);
+    }
+
+    [Fact]
+    public async Task Bootstrap_CreatesAdminWhenNoUsersExist()
+    {
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["ADMIN_EMAIL"] = "boss@example.com",
+            ["ADMIN_PASSWORD"] = Password,
+        }).Build();
+
+        await AdminBootstrapper.EnsureAdminAsync(_services, config);
+        await AdminBootstrapper.EnsureAdminAsync(_services, config); // idempotent
+
+        var row = Assert.Single(await _admin.ListAsync());
+        Assert.Equal("boss@example.com", row.Email);
+        Assert.True(row.IsAdmin);
+    }
+
+    [Fact]
+    public async Task Bootstrap_WithoutConfigAndWithoutUsers_FailsWithClearMessage()
+    {
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            AdminBootstrapper.EnsureAdminAsync(_services, new ConfigurationBuilder().Build()));
+
+        Assert.Contains("ADMIN_EMAIL", ex.Message);
+    }
+
+    [Fact]
+    public async Task Bootstrap_WithExistingUsers_NeedsNoConfig()
+    {
+        await SeedAsync("vorhanden@example.com", admin: true);
+
+        await AdminBootstrapper.EnsureAdminAsync(_services, new ConfigurationBuilder().Build());
+
+        Assert.Single(await _admin.ListAsync());
+    }
+}

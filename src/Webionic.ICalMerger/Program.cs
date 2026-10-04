@@ -9,6 +9,7 @@ using Webionic.ICalMerger.Components;
 using Webionic.ICalMerger.Components.Account;
 using Webionic.ICalMerger.Data;
 using Webionic.ICalMerger.Feed;
+using Webionic.ICalMerger.Users;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -33,23 +34,8 @@ builder.Services.AddDbContextFactory<ApplicationDbContext>((sp, options) =>
 // Identity braucht einen gewöhnlichen, scoped DbContext.
 builder.Services.AddScoped(sp => sp.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext());
 
-builder.Services.AddIdentityCore<ApplicationUser>(options =>
-    {
-        options.SignIn.RequireConfirmedAccount = false;
-        options.User.RequireUniqueEmail = true;
-        options.Password.RequiredLength = 10;
-        options.Password.RequireDigit = false;
-        options.Password.RequireLowercase = false;
-        options.Password.RequireUppercase = false;
-        options.Password.RequireNonAlphanumeric = false;
-        options.Lockout.MaxFailedAccessAttempts = 5;
-        options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
-        options.Stores.SchemaVersion = IdentitySchemaVersions.Version3;
-    })
-    .AddRoles<IdentityRole>()
-    .AddEntityFrameworkStores<ApplicationDbContext>()
-    .AddSignInManager()
-    .AddDefaultTokenProviders();
+builder.Services.AddAppIdentity();
+builder.Services.AddSingleton<UserAdminService>();
 
 var keysPath = builder.Configuration["DataProtection:KeysPath"];
 if (!string.IsNullOrWhiteSpace(keysPath))
@@ -84,6 +70,8 @@ using (var scope = app.Services.CreateScope())
     db.Database.Migrate();
     db.Database.ExecuteSqlRaw("PRAGMA journal_mode=WAL;");
 }
+
+await AdminBootstrapper.EnsureAdminAsync(app.Services, app.Configuration);
 
 app.UseForwardedHeaders();
 
