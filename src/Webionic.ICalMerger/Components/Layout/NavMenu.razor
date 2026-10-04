@@ -1,0 +1,49 @@
+@implements IDisposable
+
+@inject NavigationManager NavigationManager
+
+<header class="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-line bg-white px-4 py-3 sm:px-8">
+    <a href="" class="font-display text-xl font-bold tracking-tight text-navy-900 no-underline">iCal Merger</a>
+    <AuthorizeView>
+        <Authorized>
+            <nav class="flex flex-wrap items-center gap-1 font-semibold" aria-label="Hauptnavigation">
+                <NavLink class="rounded-full px-3.5 py-2 text-navy-900 no-underline hover:bg-navy-50" ActiveClass="bg-navy-50" href="" Match="NavLinkMatch.All">Meine Kalender</NavLink>
+                <AuthorizeView Roles="Admin" Context="adminContext">
+                    <NavLink class="rounded-full px-3.5 py-2 text-navy-900 no-underline hover:bg-navy-50" ActiveClass="bg-navy-50" href="admin/users">Nutzer</NavLink>
+                </AuthorizeView>
+            </nav>
+            <div class="ml-auto flex items-center gap-3 text-sm">
+                <NavLink class="text-muted no-underline hover:underline" href="Account/Manage/ChangePassword">@context.User.Identity?.Name</NavLink>
+                <form action="Account/Logout" method="post">
+                    <AntiforgeryToken />
+                    <input type="hidden" name="ReturnUrl" value="@currentUrl" />
+                    <button type="submit" class="btn btn-quiet btn-sm">Abmelden</button>
+                </form>
+            </div>
+        </Authorized>
+        <NotAuthorized>
+            <NavLink class="ml-auto rounded-full px-3.5 py-2 font-semibold text-navy-900 no-underline hover:bg-navy-50" href="Account/Login">Anmelden</NavLink>
+        </NotAuthorized>
+    </AuthorizeView>
+</header>
+
+@code {
+    private string? currentUrl;
+
+    protected override void OnInitialized()
+    {
+        currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+        NavigationManager.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        currentUrl = NavigationManager.ToBaseRelativePath(e.Location);
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= OnLocationChanged;
+    }
+}

@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>aspnet-Webionic_ICalMerger-781648c4-0506-4c70-a91a-55af2c6de41b</UserSecretsId>
+    <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+  </PropertyGroup>
+
+  <!-- Tailwind CSS v4 Standalone-CLI: kein Node nötig. Die Version ist gepinnt. Die Binärdatei wird beim ersten Build
+       nach tools/tailwind/ geladen (gitignored). Schlägt der Download fehl, läuft der Build mit einer Warnung
+       weiter und verwendet die eingecheckte wwwroot/css/app.css.
+       Mit -p:SkipTailwind=true wird die CSS-Erzeugung übersprungen (für dotnet watch, siehe README). -->
+  <PropertyGroup>
+    <TailwindVersion>4.3.3</TailwindVersion>
+    <TailwindDir>$(MSBuildProjectDirectory)/tools/tailwind/</TailwindDir>
+    <TailwindMusl Condition="Exists('/etc/alpine-release')">-musl</TailwindMusl>
+    <TailwindAsset Condition="$([MSBuild]::IsOSPlatform('Windows'))">tailwindcss-windows-x64.exe</TailwindAsset>
+    <TailwindAsset Condition="$([MSBuild]::IsOSPlatform('OSX')) And '$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' == 'Arm64'">tailwindcss-macos-arm64</TailwindAsset>
+    <TailwindAsset Condition="$([MSBuild]::IsOSPlatform('OSX')) And '$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' != 'Arm64'">tailwindcss-macos-x64</TailwindAsset>
+    <TailwindAsset Condition="$([MSBuild]::IsOSPlatform('Linux')) And '$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' == 'Arm64'">tailwindcss-linux-arm64$(TailwindMusl)</TailwindAsset>
+    <TailwindAsset Condition="$([MSBuild]::IsOSPlatform('Linux')) And '$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' != 'Arm64'">tailwindcss-linux-x64$(TailwindMusl)</TailwindAsset>
+    <TailwindExe>$(TailwindDir)$(TailwindVersion)-$(TailwindAsset)</TailwindExe>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="tools/**" />
+  </ItemGroup>
+
+  <Target Name="TailwindDownload" Condition="'$(SkipTailwind)' != 'true' And !Exists('$(TailwindExe)')">
+    <DownloadFile SourceUrl="https://github.com/tailwindlabs/tailwindcss/releases/download/v$(TailwindVersion)/$(TailwindAsset)"
+                  DestinationFolder="$(TailwindDir)" DestinationFileName="$(TailwindVersion)-$(TailwindAsset)"
+                  Retries="3" ContinueOnError="WarnAndContinue" />
+    <Exec Condition="Exists('$(TailwindExe)') And !$([MSBuild]::IsOSPlatform('Windows'))" Command="chmod +x &quot;$(TailwindExe)&quot;" />
+  </Target>
+
+  <Target Name="TailwindBuild" BeforeTargets="BeforeBuild" DependsOnTargets="TailwindDownload" Condition="'$(SkipTailwind)' != 'true'">
+    <Warning Condition="!Exists('$(TailwindExe)')" Text="Tailwind-CLI nicht verfügbar: wwwroot/css/app.css wird nicht neu erzeugt." />
+    <Exec Condition="Exists('$(TailwindExe)')" Command="&quot;$(TailwindExe)&quot; -i Styles/app.css -o wwwroot/css/app.css --minify" WorkingDirectory="$(MSBuildProjectDirectory)" />
+  </Target>
+
+  <!-- Entwicklung: dotnet msbuild src/Webionic.ICalMerger -t:TailwindWatch (läuft bis Strg+C, nicht minimiert) -->
+  <Target Name="TailwindWatch" DependsOnTargets="TailwindDownload">
+    <Exec Command="&quot;$(TailwindExe)&quot; -i Styles/app.css -o wwwroot/css/app.css --watch" WorkingDirectory="$(MSBuildProjectDirectory)" />
+  </Target>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.*" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.*" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.*" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,99 @@
+/* Webionic-Theme für den iCal Merger (Tailwind CSS v4).
+   Vorlage: docs/mockups/index.html. Tokens: Webionic.Website/DESIGN.md (Navy, Honig-Amber, Sechseck).
+   Die Ausgabe wwwroot/css/app.css wird bei jedem Build erzeugt und mit eingecheckt (Task 1, Step 4b).
+   Utility-Klassen stehen im Markup immer ausgeschrieben (`class="mb-4 max-w-md"`), nie zusammengesetzt
+   (`class="mb-@n"`): Der Scanner liest die .razor-Dateien als Text. Zustandsklassen wie `ok`/`warn`/`err`
+   gehören zu den Komponentenklassen unten und werden unabhängig vom Scanner immer ausgegeben. */
+@import "tailwindcss" source(none);
+@source "../Components/**/*.razor";
+
+@theme {
+  --color-navy-950: #081e35;
+  --color-navy-900: #0f3458;
+  --color-navy-800: #17476f;
+  --color-navy-700: #245b86;
+  --color-navy-300: #9db6cf;
+  --color-navy-100: #dde7f1;
+  --color-navy-50: #eff4f9;
+  --color-honey-500: #f5a623;
+  --color-honey-400: #f8bb4f;
+  --color-honey-200: #fde3b0;
+  --color-honey-100: #fff1d4;
+  --color-ink: #0c2238;
+  --color-muted: #4a6076;
+  --color-line: #d9e3ed;
+  --color-ground: #f4f7fb;
+  /* Fehlerrot ausschließlich für Fehlerzustände, keine Akzentfarbe */
+  --color-err: #a6261d;
+  --color-err-soft: #fdecea;
+  --color-warn-ink: #7a4d00;
+
+  --font-display: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
+
+  --radius-field: 12px;
+  --radius-panel: 24px;
+  --shadow-soft: 0 1px 2px rgb(8 20 35 / 0.06), 0 12px 32px -12px rgb(8 20 35 / 0.2);
+}
+
+@layer base {
+  body { margin: 0; background: var(--color-ground); color: var(--color-ink); font: 400 1rem/1.5 var(--font-sans); }
+  h1, h2, h3 { font-family: var(--font-display); letter-spacing: -.02em; color: var(--color-navy-900); }
+  h1 { font-size: 2rem; font-weight: 700; line-height: 1.1; margin: 0 0 1rem; }
+  h1:focus { outline: none; }
+  p { margin: 0 0 1rem; }
+  main a:not([class]) { color: var(--color-navy-700); text-decoration: underline; text-underline-offset: 3px; }
+  code { font: 500 .875rem ui-monospace, SFMono-Regular, Menlo, monospace; color: inherit; }
+  ::selection { background: var(--color-honey-200); color: var(--color-navy-950); }
+  * { scrollbar-color: var(--color-navy-300) transparent; }
+
+  /* Fokus: Navy statt Amber, weil Amber auf Weiß unter 3:1 Kontrast liegt. Auf dunklen Flächen Amber (siehe Komponenten). */
+  :focus-visible { outline: 3px solid var(--color-navy-900); outline-offset: 2px; }
+
+  /* Blazor-Standardflächen */
+  .valid.modified:not([type=checkbox]) { outline: 0; }
+  .invalid { outline: 2px solid var(--color-err); }
+  .validation-message { color: var(--color-err); font-size: .875rem; margin-top: 4px; }
+  .validation-errors { color: var(--color-err); margin: 0 0 16px; padding-left: 1.25rem; list-style: disc; font-size: .875rem; }
+  .blazor-error-boundary { background: var(--color-err); color: #fff; padding: 1rem; }
+  .blazor-error-boundary::after { content: "Es ist ein Fehler aufgetreten."; }
+  #blazor-error-ui {
+    color-scheme: light only; background: var(--color-honey-100); color: var(--color-navy-950);
+    bottom: 0; box-shadow: 0 -1px 2px rgb(8 20 35 / .2); box-sizing: border-box; display: none;
+    left: 0; padding: .6rem 1.25rem .7rem; position: fixed; width: 100%; z-index: 1000;
+  }
+  #blazor-error-ui .dismiss { cursor: pointer; position: absolute; right: .75rem; top: .5rem; background: none; border: 0; font-weight: 600; text-decoration: underline; }
+}
+
+@layer components {
+  /* Buttons */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 22px;
+    border: 0; border-radius: 9999px; font: 600 .9375rem var(--font-sans); cursor: pointer; text-decoration: none; white-space: nowrap;
+  }
+  .btn:disabled, .btn.disabled { opacity: .55; cursor: not-allowed; }
+  .btn-lg { height: 52px; font-size: 1rem; }
+  .btn-primary { background: var(--color-honey-500); color: var(--color-navy-950); }
+  .btn-primary:hover:not(:disabled) { background: var(--color-honey-400); color: var(--color-navy-950); }
+  .btn-navy { background: var(--color-navy-900); color: #fff; }
+  .btn-navy:hover:not(:disabled) { background: var(--color-navy-800); color: #fff; }
+  .btn-quiet { background: transparent; color: var(--color-navy-900); box-shadow: inset 0 0 0 1.5px var(--color-navy-300); }
+  .btn-quiet:hover:not(:disabled) { background: var(--color-navy-50); color: var(--color-navy-900); }
+  .btn-danger { background: transparent; color: var(--color-err); box-shadow: inset 0 0 0 1.5px #e3b3ae; }
+  .btn-danger:hover:not(:disabled) { background: var(--color-err-soft); color: var(--color-err); }
+  .btn-err { background: var(--color-err); color: #fff; }
+  .btn-err:hover:not(:disabled) { background: #8c1f17; color: #fff; }
+  .btn-sm { height: 36px; padding: 0 16px; font-size: .875rem; }
+
+  /* Formularfelder und Meldungen */
+  .input {
+    display: block; height: 48px; width: 100%; border-radius: var(--radius-field); border: 1.5px solid var(--color-navy-300);
+    padding: 0 14px; font: 400 1rem var(--font-sans); color: var(--color-ink); background: #fff;
+  }
+  .input::placeholder { color: var(--color-muted); }
+  .input:focus { border-color: var(--color-navy-700); }
+  .field-label { display: block; font-weight: 600; font-size: .875rem; margin-bottom: 6px; }
+  .notice { border-radius: 16px; padding: 12px 18px; margin: 0 0 20px; background: var(--color-navy-50); color: var(--color-navy-950); }
+  .notice.err { background: var(--color-err-soft); color: var(--color-err); }
+  .notice.ok { background: var(--color-navy-50); color: var(--color-navy-950); }
+}

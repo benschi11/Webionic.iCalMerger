@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Webionic.ICalMerger/Webionic.ICalMerger.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Webionic.ICalMerger.Tests/Webionic.ICalMerger.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -59,3 +59,12 @@ nunit-*.xml
 # Worktrees und SDD-Arbeitsdateien
 .claude/worktrees/
 .superpowers/
+
+# App data
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# Tailwind-CLI (wird beim Build geladen)
+**/tools/tailwind/
