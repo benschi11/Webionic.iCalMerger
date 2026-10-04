@@ -52,6 +52,18 @@ public class IcsMergerTests
     }
 
     [Fact]
+    public void Merge_KeepsEventsWithEmptyUid()
+    {
+        var first = Calendar(Event("", "Eins"));
+        var second = Calendar(Event("", "Zwei"));
+
+        var result = IcsMerger.Merge("K", [first, second]);
+
+        Assert.Contains("SUMMARY:Eins", result);
+        Assert.Contains("SUMMARY:Zwei", result);
+    }
+
+    [Fact]
     public void Merge_KeepsEventsWithoutUid()
     {
         const string noUid = "BEGIN:VEVENT\r\nDTSTART:20260105T100000Z\r\nSUMMARY:Ohne\r\nEND:VEVENT\r\n";
@@ -250,6 +262,9 @@ public class IcsMergerTests
     [InlineData("BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n", true)]
     [InlineData("﻿BEGIN:VCALENDAR\nEND:VCALENDAR", true)]
     [InlineData("begin:vcalendar\r\nend:vcalendar", true)]
+    [InlineData("  \n  BEGIN:VCALENDAR\nEND:VCALENDAR\n", true)]
+    [InlineData("\uFEFF\r\n  \r\nBEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n", true)]
+    [InlineData("   BEGIN:VCALENDAR", true)]
     [InlineData("<html><body>Bitte anmelden</body></html>", false)]
     [InlineData("", false)]
     [InlineData(null, false)]

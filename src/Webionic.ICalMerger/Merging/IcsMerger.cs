@@ -12,7 +12,7 @@ public static class IcsMerger
 
     public static bool LooksLikeCalendar(string? ics) =>
         !string.IsNullOrEmpty(ics) &&
-        Unfold(ics).Any(line => line.TrimEnd().Equals("BEGIN:VCALENDAR", StringComparison.OrdinalIgnoreCase));
+        Unfold(ics).Any(line => line.Trim().Equals("BEGIN:VCALENDAR", StringComparison.OrdinalIgnoreCase));
 
     /// <param name="sources">iCalendar-Texte, nach Priorität sortiert. Bei Duplikaten gewinnt der erste.</param>
     public static string Merge(string calendarName, IReadOnlyList<string> sources)
@@ -37,7 +37,7 @@ public static class IcsMerger
                 }
 
                 var uid = TopLevelValue(block, "UID");
-                if (uid is null)
+                if (string.IsNullOrEmpty(uid))
                 {
                     events.Add(block);
                     continue;

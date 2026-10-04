@@ -168,8 +168,7 @@ public sealed class CalendarService(
             throw new DomainException($"Die URL konnte nicht abgerufen werden: {ex.Message}");
         }
 
-        // Der Fetcher kann eine UTF-8-BOM mitliefern; BOM und führende Leerzeichen dürfen kein Grund zur Ablehnung sein.
-        if (!IcsMerger.LooksLikeCalendar(ics?.TrimStart('﻿').TrimStart()))
+        if (!IcsMerger.LooksLikeCalendar(ics))
         {
             throw new DomainException("Die URL liefert keinen iCal-Kalender.");
         }

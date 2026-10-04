@@ -232,6 +232,19 @@ public class SourceCacheTests
         Assert.Equal(fetchTime, failed.SucceededAt);
     }
 
+    [Theory]
+    [InlineData("\uFEFF\r\n  \r\nBEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR\r\n")]
+    [InlineData("  \n  BEGIN:VCALENDAR\nEND:VCALENDAR\n")]
+    public async Task Get_AcceptsCalendarWithLeadingBomOrWhitespace(string ics)
+    {
+        _fetcher.Set(Url, ics);
+
+        var result = await _cache.GetAsync(Url, default);
+
+        Assert.Null(result.Error);
+        Assert.Equal(ics, result.Ics);
+    }
+
     [Fact]
     public async Task Get_FailureAfterTwelveHours_StillServesStaleContent()
     {
