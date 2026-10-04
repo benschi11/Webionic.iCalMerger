@@ -97,40 +97,67 @@ public static class IcsMerger
         return lines;
     }
 
-    /// <summary>Liefert vollständige VEVENT- und VTIMEZONE-Blöcke. Unvollständige Blöcke werden verworfen.</summary>
+    /// <summary>
+    /// Liefert vollständige, ausgewogene VEVENT- und VTIMEZONE-Blöcke. Unvollständige oder unausgewogene
+    /// Blöcke werden verworfen. Ein neues oberstes BEGIN:VEVENT/VTIMEZONE oder END:VCALENDAR bricht einen offenen Block ab.
+    /// </summary>
     private static IEnumerable<List<string>> ExtractBlocks(List<string> lines)
     {
         List<string>? current = null;
-        string beginMarker = "";
-        string endMarker = "";
+        var endMarker = "";
+        var nested = new Stack<string>();
 
         foreach (var raw in lines)
         {
             var line = raw.TrimEnd();
+            var isTopLevelBegin = IsBegin(line, "VEVENT") || IsBegin(line, "VTIMEZONE");
 
             if (current is null)
             {
-                if (IsBegin(line, "VEVENT") || IsBegin(line, "VTIMEZONE"))
+                if (isTopLevelBegin)
                 {
-                    beginMarker = line.ToUpperInvariant();
-                    endMarker = "END:" + beginMarker["BEGIN:".Length..];
+                    endMarker = "END:" + line["BEGIN:".Length..].ToUpperInvariant();
                     current = [line];
+                    nested.Clear();
                 }
                 continue;
             }
 
-            if (line.Equals(beginMarker, StringComparison.OrdinalIgnoreCase))
+            if (isTopLevelBegin)
             {
                 // Der vorige Block war nicht abgeschlossen: verwerfen und neu beginnen.
+                endMarker = "END:" + line["BEGIN:".Length..].ToUpperInvariant();
                 current = [line];
+                nested.Clear();
+                continue;
+            }
+
+            if (line.Equals("END:VCALENDAR", StringComparison.OrdinalIgnoreCase))
+            {
+                current = null;
                 continue;
             }
 
             current.Add(line);
+
             if (line.Equals(endMarker, StringComparison.OrdinalIgnoreCase))
             {
-                yield return current;
+                if (nested.Count == 0)
+                {
+                    yield return current;
+                }
                 current = null;
+            }
+            else if (line.StartsWith("BEGIN:", StringComparison.OrdinalIgnoreCase))
+            {
+                nested.Push(line["BEGIN:".Length..].ToUpperInvariant());
+            }
+            else if (line.StartsWith("END:", StringComparison.OrdinalIgnoreCase))
+            {
+                if (nested.Count == 0 || nested.Pop() != line["END:".Length..].ToUpperInvariant())
+                {
+                    current = null; // END ohne passendes BEGIN: Block ist kaputt.
+                }
             }
         }
     }

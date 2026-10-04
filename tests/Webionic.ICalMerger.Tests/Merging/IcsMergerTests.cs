@@ -169,6 +169,58 @@ public class IcsMergerTests
     }
 
     [Fact]
+    public void Merge_TruncatedTimezoneDoesNotSwallowFollowingEvents()
+    {
+        var truncatedTz = "BEGIN:VTIMEZONE\r\nTZID:Europe/Vienna\r\n";
+
+        var result = IcsMerger.Merge("X", [Calendar(truncatedTz, Event("a@x"), Event("b@x"))]);
+
+        Assert.Contains("UID:a@x", result);
+        Assert.Contains("UID:b@x", result);
+        Assert.DoesNotContain("BEGIN:VTIMEZONE", result);
+    }
+
+    [Fact]
+    public void Merge_TruncatedEventDoesNotSwallowFollowingTimezone()
+    {
+        var truncated = "BEGIN:VEVENT\r\nUID:cut@x\r\n";
+
+        var result = IcsMerger.Merge("X", [Calendar(truncated, Vienna, Event("ok@x"))]);
+
+        Assert.DoesNotContain("cut@x", result);
+        Assert.Contains("TZID:Europe/Vienna", result);
+        Assert.Contains("UID:ok@x", result);
+    }
+
+    [Fact]
+    public void Merge_KeepsTimezoneWithStandardAndDaylight()
+    {
+        var tz = "BEGIN:VTIMEZONE\r\nTZID:Europe/Vienna\r\nBEGIN:STANDARD\r\nTZOFFSETTO:+0100\r\nEND:STANDARD\r\n" +
+                 "BEGIN:DAYLIGHT\r\nTZOFFSETTO:+0200\r\nEND:DAYLIGHT\r\nEND:VTIMEZONE\r\n";
+
+        var result = IcsMerger.Merge("X", [Calendar(tz, Event("a@x"))]);
+
+        Assert.Contains("BEGIN:STANDARD", result);
+        Assert.Contains("BEGIN:DAYLIGHT", result);
+        Assert.Contains("UID:a@x", result);
+    }
+
+    [Fact]
+    public void Merge_DropsEventWithUnbalancedAlarmButKeepsNeighbours()
+    {
+        var bad = Event("bad@x", extra: "BEGIN:VALARM\r\nACTION:DISPLAY\r\n");
+
+        var result = IcsMerger.Merge("X", [Calendar(Event("a@x"), bad, Event("b@x"))]);
+
+        Assert.DoesNotContain("bad@x", result);
+        Assert.DoesNotContain("VALARM", result);
+        Assert.Contains("UID:a@x", result);
+        Assert.Contains("UID:b@x", result);
+        Assert.Equal(2, Count(result, "BEGIN:VEVENT"));
+        Assert.Equal(2, Count(result, "END:VEVENT"));
+    }
+
+    [Fact]
     public void Merge_EscapesCalendarName()
     {
         var result = IcsMerger.Merge("Familie, Papa; \\ \"Mama\"\nX", []);
