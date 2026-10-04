@@ -234,6 +234,7 @@
   .data-table td { padding: 14px 12px; border-bottom: 1px solid var(--color-line); vertical-align: middle; font-size: .9375rem; overflow-wrap: anywhere; }
   .data-table tr:last-child td { border-bottom: 0; }
   .data-table .actions { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
+  .data-table td:last-child { width: 1%; white-space: nowrap; }
   .table-panel { padding: 20px 16px; }
   .chip { display: inline-flex; align-items: center; border-radius: 9999px; padding: 3px 12px; font-weight: 600; font-size: .8125rem; margin-right: 6px; }
   .chip.admin { background: var(--color-navy-900); color: #fff; }
@@ -241,7 +242,7 @@
   .chip.invited { background: var(--color-honey-100); color: var(--color-warn-ink); }
   .chip.locked { background: var(--color-err-soft); color: var(--color-err); }
   .invite { background: var(--color-honey-100); border-radius: 20px; padding: 18px 22px; margin-bottom: 20px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; color: var(--color-navy-950); }
-  .invite code { flex: 1 1 320px; min-width: 0; background: #fff; border-radius: 12px; padding: 10px 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .invite code { flex: 1 1 200px; min-width: 0; background: #fff; border-radius: 12px; padding: 10px 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .invite p { margin: 0; flex: 1 1 100%; color: var(--color-warn-ink); font-size: .875rem; }
 
   /* Handybreite */

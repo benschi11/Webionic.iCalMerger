@@ -14,8 +14,37 @@ public sealed record UserRow(string Id, string Email, bool IsAdmin, bool IsLocke
 /// Nutzerverwaltung für Admins. Jede Operation läuft in einem eigenen DI-Scope, damit sie
 /// in langlebigen Blazor-Circuits keinen veralteten DbContext verwendet.
 /// </summary>
-public sealed class UserAdminService(IServiceScopeFactory scopes)
+public sealed class UserAdminService
 {
+    private readonly IServiceScopeFactory scopes;
+    private readonly string? publicBaseUrl;
+
+    public UserAdminService(IServiceScopeFactory scopes, IConfiguration configuration)
+    {
+        this.scopes = scopes;
+        publicBaseUrl = ReadPublicBaseUrl(configuration);
+    }
+
+    /// <summary>
+    /// Liest <c>App:PublicBaseUrl</c> (ohne abschließenden Schrägstrich) und prüft sie. Leer bedeutet:
+    /// die Basis der Anfrage verwenden. Wirft <see cref="InvalidOperationException"/> bei ungültigem Wert.
+    /// </summary>
+    public static string? ReadPublicBaseUrl(IConfiguration configuration)
+    {
+        var value = configuration["App:PublicBaseUrl"]?.Trim();
+        if (string.IsNullOrEmpty(value)) return null;
+
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri)
+            || uri.Scheme is not ("http" or "https")
+            || uri.Query.Length > 0 || uri.Fragment.Length > 0 || uri.UserInfo.Length > 0)
+        {
+            throw new InvalidOperationException(
+                "App:PublicBaseUrl muss eine absolute http- oder https-Adresse ohne Query und Fragment sein, zum Beispiel https://kalender.example.org.");
+        }
+
+        return value.TrimEnd('/');
+    }
+
     public async Task<List<UserRow>> ListAsync()
     {
         using var scope = scopes.CreateScope();
@@ -45,16 +74,17 @@ public sealed class UserAdminService(IServiceScopeFactory scopes)
     }
 
     /// <returns>Der Einladungslink, den der Admin selbst weitergibt.</returns>
-    public async Task<string> InviteAsync(string email, string baseUri)
+    public async Task<string> InviteAsync(string email, string baseUri, string actingUserId)
     {
+        using var scope = scopes.CreateScope();
+        var users = UserManagerOf(scope);
+        await EnsureActorAsync(users, actingUserId);
+
         email = (email ?? "").Trim();
         if (email.Length == 0 || !new EmailAddressAttribute().IsValid(email))
         {
             throw new DomainException("Das ist keine gültige E-Mail-Adresse.");
         }
-
-        using var scope = scopes.CreateScope();
-        var users = UserManagerOf(scope);
 
         var user = new ApplicationUser { UserName = email, Email = email, EmailConfirmed = true };
         var created = await users.CreateAsync(user);
@@ -68,17 +98,19 @@ public sealed class UserAdminService(IServiceScopeFactory scopes)
         return await BuildLinkAsync(users, user, baseUri);
     }
 
-    public async Task<string> CreateResetLinkAsync(string userId, string baseUri)
+    public async Task<string> CreateResetLinkAsync(string userId, string baseUri, string actingUserId)
     {
         using var scope = scopes.CreateScope();
         var users = UserManagerOf(scope);
+        await EnsureActorAsync(users, actingUserId);
         return await BuildLinkAsync(users, await FindAsync(users, userId), baseUri);
     }
 
-    public async Task SetLockedAsync(string userId, bool locked)
+    public async Task SetLockedAsync(string userId, bool locked, string actingUserId)
     {
         using var scope = scopes.CreateScope();
         var users = UserManagerOf(scope);
+        await EnsureActorAsync(users, actingUserId);
         var user = await FindAsync(users, userId);
 
         if (locked)
@@ -96,10 +128,11 @@ public sealed class UserAdminService(IServiceScopeFactory scopes)
         Check(await users.UpdateSecurityStampAsync(user));
     }
 
-    public async Task SetAdminAsync(string userId, bool isAdmin)
+    public async Task SetAdminAsync(string userId, bool isAdmin, string actingUserId)
     {
         using var scope = scopes.CreateScope();
         var users = UserManagerOf(scope);
+        await EnsureActorAsync(users, actingUserId);
         var user = await FindAsync(users, userId);
 
         if (isAdmin)
@@ -117,13 +150,15 @@ public sealed class UserAdminService(IServiceScopeFactory scopes)
 
     public async Task DeleteAsync(string userId, string actingUserId)
     {
+        using var scope = scopes.CreateScope();
+        var users = UserManagerOf(scope);
+        await EnsureActorAsync(users, actingUserId);
+
         if (userId == actingUserId)
         {
             throw new DomainException("Du kannst dich nicht selbst löschen.");
         }
 
-        using var scope = scopes.CreateScope();
-        var users = UserManagerOf(scope);
         var user = await FindAsync(users, userId);
 
         await EnsureNotLastActiveAdminAsync(users, user);
@@ -136,11 +171,21 @@ public sealed class UserAdminService(IServiceScopeFactory scopes)
     private static async Task<ApplicationUser> FindAsync(UserManager<ApplicationUser> users, string userId) =>
         await users.FindByIdAsync(userId) ?? throw new DomainException("Nutzer nicht gefunden.");
 
-    private static async Task<string> BuildLinkAsync(UserManager<ApplicationUser> users, ApplicationUser user, string baseUri)
+    /// <summary>Tiefenverteidigung: Der Akteur muss jetzt gerade ein aktiver Admin sein (nicht nur beim Öffnen der Seite).</summary>
+    private static async Task EnsureActorAsync(UserManager<ApplicationUser> users, string? actingUserId)
+    {
+        var actor = string.IsNullOrEmpty(actingUserId) ? null : await users.FindByIdAsync(actingUserId);
+        if (actor is null || !await users.IsInRoleAsync(actor, Roles.Admin) || await users.IsLockedOutAsync(actor))
+        {
+            throw new DomainException("Keine Berechtigung.");
+        }
+    }
+
+    private async Task<string> BuildLinkAsync(UserManager<ApplicationUser> users, ApplicationUser user, string baseUri)
     {
         var token = await users.GeneratePasswordResetTokenAsync(user);
         var code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
-        return $"{baseUri.TrimEnd('/')}/Account/ResetPassword?code={code}";
+        return $"{(publicBaseUrl ?? baseUri.TrimEnd('/'))}/Account/ResetPassword?code={code}";
     }
 
     private static async Task EnsureNotLastActiveAdminAsync(UserManager<ApplicationUser> users, ApplicationUser user)

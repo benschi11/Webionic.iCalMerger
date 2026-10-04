@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.Sqlite;
@@ -41,6 +42,24 @@ internal sealed class AppFactory : WebApplicationFactory<Program>
             services.RemoveAll<TimeProvider>();
             services.AddSingleton<TimeProvider>(Time);
         });
+    }
+
+    public async Task<string> AdminIdAsync()
+    {
+        using var scope = Services.CreateScope();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        return (await users.FindByEmailAsync(AdminEmail))!.Id;
+    }
+
+    /// <summary>Legt einen Nutzer ohne Admin-Rolle mit Passwort an und gibt seine Id zurück.</summary>
+    public async Task<string> CreateUserAsync(string email, string password)
+    {
+        using var scope = Services.CreateScope();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var user = new ApplicationUser { UserName = email, Email = email, EmailConfirmed = true };
+        var result = await users.CreateAsync(user, password);
+        Assert.True(result.Succeeded, string.Join(" ", result.Errors.Select(e => e.Description)));
+        return user.Id;
     }
 
     public async Task<MergedCalendar> SeedCalendarAsync(string name, params string[] sourceUrls)

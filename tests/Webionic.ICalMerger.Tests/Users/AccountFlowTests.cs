@@ -103,7 +103,7 @@ public sealed class AccountFlowTests : IDisposable
     public async Task InviteLink_LetsNewUserSetPasswordAndLogIn()
     {
         var admin = _factory.Services.GetRequiredService<UserAdminService>();
-        var link = await admin.InviteAsync("neu@example.com", "http://localhost/");
+        var link = await admin.InviteAsync("neu@example.com", "http://localhost/", await _factory.AdminIdAsync());
         var pathAndQuery = new Uri(link).PathAndQuery;
         var code = pathAndQuery[(pathAndQuery.IndexOf("code=", StringComparison.Ordinal) + 5)..];
         var token = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(code));
@@ -144,5 +144,44 @@ public sealed class AccountFlowTests : IDisposable
 
         Assert.Equal(HttpStatusCode.Found, response.StatusCode);
         Assert.Contains("InvalidPasswordReset", response.Headers.Location!.ToString());
+    }
+
+    [Fact]
+    public async Task Login_WithAdminLockedUser_IsRefusedEvenWithCorrectPassword()
+    {
+        var id = await _factory.CreateUserAsync("gesperrt@example.com", "ein langes passwort");
+        await _factory.Services.GetRequiredService<UserAdminService>().SetLockedAsync(id, true, await _factory.AdminIdAsync());
+
+        var response = await WebHelpers.LoginAsync(_factory.NewClient(), "gesperrt@example.com", "ein langes passwort");
+
+        Assert.False(SetsLoginCookie(response));
+        Assert.Contains("Lockout", response.Headers.Location?.ToString() ?? "");
+    }
+
+    [Fact]
+    public async Task ResetToken_SubmittedForOtherUsersEmail_IsRejected()
+    {
+        var admin = _factory.Services.GetRequiredService<UserAdminService>();
+        var actor = await _factory.AdminIdAsync();
+        var victimId = await _factory.CreateUserAsync("opfer@example.com", "ein langes passwort");
+        var link = await admin.InviteAsync("angreifer@example.com", "http://localhost/", actor);
+        var pathAndQuery = new Uri(link).PathAndQuery;
+        var code = pathAndQuery[(pathAndQuery.IndexOf("code=", StringComparison.Ordinal) + 5)..];
+        var token = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(code));
+
+        var post = await WebHelpers.PostFormAsync(_factory.NewClient(), pathAndQuery, "reset-password", new Dictionary<string, string>
+        {
+            ["Input.Email"] = "opfer@example.com",
+            ["Input.Password"] = "neues geheimes passwort",
+            ["Input.ConfirmPassword"] = "neues geheimes passwort",
+            ["Input.Code"] = token,
+        });
+
+        Assert.DoesNotContain("ResetPasswordConfirmation", post.Headers.Location?.ToString() ?? "");
+        using var scope = _factory.Services.CreateScope();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var victim = (await users.FindByIdAsync(victimId))!;
+        Assert.True(await users.CheckPasswordAsync(victim, "ein langes passwort"));
+        Assert.False(await users.CheckPasswordAsync(victim, "neues geheimes passwort"));
     }
 }

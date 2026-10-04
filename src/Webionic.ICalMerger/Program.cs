@@ -57,6 +57,9 @@ builder.Services.AddCalendarServices(builder.Configuration);
 
 var app = builder.Build();
 
+// Ungültiges App:PublicBaseUrl soll den Start mit klarer Meldung abbrechen, nicht erst den ersten Einladungslink.
+_ = UserAdminService.ReadPublicBaseUrl(app.Configuration);
+
 // Datenbank-Verzeichnis anlegen und Migrationen anwenden.
 var dataSource = new SqliteConnectionStringBuilder(app.Configuration.GetConnectionString("DefaultConnection")).DataSource;
 if (!string.IsNullOrEmpty(dataSource) && Path.GetDirectoryName(Path.GetFullPath(dataSource)) is { } dataDirectory)

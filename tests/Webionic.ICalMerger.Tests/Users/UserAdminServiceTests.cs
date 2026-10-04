@@ -26,6 +26,7 @@ public sealed class UserAdminServiceTests : IDisposable
         _connection.Open();
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddDataProtection();
         services.AddDbContext<ApplicationDbContext>(o => o.UseSqlite(_connection));
         services.AddAppIdentity();
@@ -39,6 +40,11 @@ public sealed class UserAdminServiceTests : IDisposable
 
         _admin = _services.GetRequiredService<UserAdminService>();
     }
+
+    private string? _actorId;
+
+    /// <summary>Ein aktiver Admin, der die Operationen ausführt (wird beim ersten Zugriff angelegt).</summary>
+    private string Actor => _actorId ??= SeedAsync("actor@example.com", admin: true).GetAwaiter().GetResult();
 
     public void Dispose()
     {
@@ -74,7 +80,7 @@ public sealed class UserAdminServiceTests : IDisposable
     [Fact]
     public async Task Invite_CreatesUserWithoutPassword_AndLinkSetsPassword()
     {
-        var link = await _admin.InviteAsync("  neu@example.com ", BaseUri);
+        var link = await _admin.InviteAsync("  neu@example.com ", BaseUri, Actor);
 
         Assert.StartsWith("https://cal.example.com/Account/ResetPassword?code=", link);
         var token = TokenFromLink(link);
@@ -94,7 +100,7 @@ public sealed class UserAdminServiceTests : IDisposable
     [Fact]
     public async Task Invite_LinkWorksOnlyOnce()
     {
-        var token = TokenFromLink(await _admin.InviteAsync("neu@example.com", BaseUri));
+        var token = TokenFromLink(await _admin.InviteAsync("neu@example.com", BaseUri, Actor));
 
         var second = await WithUsersAsync(async users =>
         {
@@ -109,9 +115,9 @@ public sealed class UserAdminServiceTests : IDisposable
     [Fact]
     public async Task Invite_RejectsDuplicateEmailIgnoringCase()
     {
-        await _admin.InviteAsync("neu@example.com", BaseUri);
+        await _admin.InviteAsync("neu@example.com", BaseUri, Actor);
 
-        var ex = await Assert.ThrowsAsync<DomainException>(() => _admin.InviteAsync("Neu@Example.com", BaseUri));
+        var ex = await Assert.ThrowsAsync<DomainException>(() => _admin.InviteAsync("Neu@Example.com", BaseUri, Actor));
 
         Assert.Contains("bereits vergeben", ex.Message);
     }
@@ -122,7 +128,7 @@ public sealed class UserAdminServiceTests : IDisposable
     [InlineData("kein-at-zeichen")]
     public async Task Invite_RejectsInvalidEmail(string email)
     {
-        await Assert.ThrowsAsync<DomainException>(() => _admin.InviteAsync(email, BaseUri));
+        await Assert.ThrowsAsync<DomainException>(() => _admin.InviteAsync(email, BaseUri, Actor));
     }
 
     [Fact]
@@ -130,7 +136,7 @@ public sealed class UserAdminServiceTests : IDisposable
     {
         var id = await SeedAsync("alt@example.com", admin: false);
 
-        var token = TokenFromLink(await _admin.CreateResetLinkAsync(id, BaseUri));
+        var token = TokenFromLink(await _admin.CreateResetLinkAsync(id, BaseUri, Actor));
 
         var ok = await WithUsersAsync(async users =>
         {
@@ -146,7 +152,7 @@ public sealed class UserAdminServiceTests : IDisposable
     [Fact]
     public async Task ResetLink_ForUnknownUser_Throws()
     {
-        await Assert.ThrowsAsync<DomainException>(() => _admin.CreateResetLinkAsync("gibt-es-nicht", BaseUri));
+        await Assert.ThrowsAsync<DomainException>(() => _admin.CreateResetLinkAsync("gibt-es-nicht", BaseUri, Actor));
     }
 
     [Fact]
@@ -175,18 +181,20 @@ public sealed class UserAdminServiceTests : IDisposable
         var rows = await _admin.ListAsync();
 
         Assert.Equal(2, rows.Single(r => r.Id == withCalendars).CalendarCount);
-        Assert.Equal(0, rows.Single(r => r.Id != withCalendars).CalendarCount);
+        Assert.Equal(0, rows.Single(r => r.Email == "b@example.com").CalendarCount);
     }
 
     [Fact]
     public async Task LastActiveAdmin_CannotBeDeletedLockedOrDemoted()
     {
         var onlyAdmin = await SeedAsync("admin@example.com", admin: true);
-        var other = await SeedAsync("user@example.com", admin: false);
+        await SeedAsync("user@example.com", admin: false);
 
-        await Assert.ThrowsAsync<DomainException>(() => _admin.DeleteAsync(onlyAdmin, actingUserId: other));
-        await Assert.ThrowsAsync<DomainException>(() => _admin.SetLockedAsync(onlyAdmin, true));
-        await Assert.ThrowsAsync<DomainException>(() => _admin.SetAdminAsync(onlyAdmin, false));
+        // Der Akteur muss selbst aktiver Admin sein, daher ist der letzte Admin nur über sich selbst erreichbar.
+        var ex1 = await Assert.ThrowsAsync<DomainException>(() => _admin.SetLockedAsync(onlyAdmin, true, onlyAdmin));
+        var ex2 = await Assert.ThrowsAsync<DomainException>(() => _admin.SetAdminAsync(onlyAdmin, false, onlyAdmin));
+        Assert.Contains("letzte aktive Admin", ex1.Message);
+        Assert.Contains("letzte aktive Admin", ex2.Message);
 
         var rows = await _admin.ListAsync();
         Assert.Contains(rows, r => r.Id == onlyAdmin && r.IsAdmin && !r.IsLockedOut);
@@ -198,7 +206,7 @@ public sealed class UserAdminServiceTests : IDisposable
         var first = await SeedAsync("eins@example.com", admin: true);
         var second = await SeedAsync("zwei@example.com", admin: true);
 
-        await _admin.SetAdminAsync(first, false);
+        await _admin.SetAdminAsync(first, false, first);
         Assert.DoesNotContain(await _admin.ListAsync(), r => r.Id == first && r.IsAdmin);
 
         await _admin.DeleteAsync(first, actingUserId: second);
@@ -210,9 +218,9 @@ public sealed class UserAdminServiceTests : IDisposable
     {
         var first = await SeedAsync("eins@example.com", admin: true);
         var second = await SeedAsync("zwei@example.com", admin: true);
-        await _admin.SetLockedAsync(first, true);
+        await _admin.SetLockedAsync(first, true, second);
 
-        await Assert.ThrowsAsync<DomainException>(() => _admin.SetAdminAsync(second, false));
+        await Assert.ThrowsAsync<DomainException>(() => _admin.SetAdminAsync(second, false, second));
     }
 
     [Fact]
@@ -220,11 +228,11 @@ public sealed class UserAdminServiceTests : IDisposable
     {
         var id = await SeedAsync("user@example.com", admin: false);
 
-        await _admin.SetLockedAsync(id, true);
-        Assert.True((await _admin.ListAsync()).Single().IsLockedOut);
+        await _admin.SetLockedAsync(id, true, Actor);
+        Assert.True((await _admin.ListAsync()).Single(r => r.Id == id).IsLockedOut);
 
-        await _admin.SetLockedAsync(id, false);
-        Assert.False((await _admin.ListAsync()).Single().IsLockedOut);
+        await _admin.SetLockedAsync(id, false, Actor);
+        Assert.False((await _admin.ListAsync()).Single(r => r.Id == id).IsLockedOut);
     }
 
     [Fact]
@@ -258,7 +266,7 @@ public sealed class UserAdminServiceTests : IDisposable
     public async Task List_ShowsRoleLockAndPasswordStatus()
     {
         await SeedAsync("admin@example.com", admin: true);
-        await _admin.InviteAsync("neu@example.com", BaseUri);
+        await _admin.InviteAsync("neu@example.com", BaseUri, Actor);
 
         var rows = await _admin.ListAsync();
 
@@ -269,6 +277,103 @@ public sealed class UserAdminServiceTests : IDisposable
         Assert.False(invited.IsAdmin);
         Assert.False(invited.HasPassword);
     }
+
+    [Fact]
+    public async Task Mutations_RejectNonAdminActor()
+    {
+        var normal = await SeedAsync("normal@example.com", admin: false);
+        var target = await SeedAsync("target@example.com", admin: false);
+
+        await AssertNoPermissionAsync(
+            () => _admin.InviteAsync("neu@example.com", BaseUri, normal),
+            () => _admin.CreateResetLinkAsync(target, BaseUri, normal),
+            () => _admin.SetLockedAsync(target, true, normal),
+            () => _admin.SetAdminAsync(target, true, normal),
+            () => _admin.DeleteAsync(target, normal),
+            () => _admin.InviteAsync("neu@example.com", BaseUri, "gibt-es-nicht"));
+
+        Assert.DoesNotContain(await _admin.ListAsync(), r => r.Email == "neu@example.com");
+        Assert.DoesNotContain(await _admin.ListAsync(), r => r.Id == target && (r.IsAdmin || r.IsLockedOut));
+    }
+
+    [Fact]
+    public async Task Mutations_RejectLockedAdminActor()
+    {
+        var locked = await SeedAsync("gesperrt@example.com", admin: true);
+        var target = await SeedAsync("target@example.com", admin: false);
+        await _admin.SetLockedAsync(locked, true, Actor);
+
+        await AssertNoPermissionAsync(
+            () => _admin.InviteAsync("neu@example.com", BaseUri, locked),
+            () => _admin.CreateResetLinkAsync(target, BaseUri, locked),
+            () => _admin.SetLockedAsync(target, true, locked),
+            () => _admin.SetAdminAsync(target, true, locked),
+            () => _admin.DeleteAsync(target, locked));
+    }
+
+    [Fact]
+    public async Task Mutations_RejectDemotedAdminActor()
+    {
+        var demoted = await SeedAsync("herabgestuft@example.com", admin: true);
+        var target = await SeedAsync("target@example.com", admin: false);
+        await _admin.SetAdminAsync(demoted, false, Actor);
+
+        await AssertNoPermissionAsync(
+            () => _admin.InviteAsync("neu@example.com", BaseUri, demoted),
+            () => _admin.CreateResetLinkAsync(target, BaseUri, demoted),
+            () => _admin.SetLockedAsync(target, true, demoted),
+            () => _admin.SetAdminAsync(target, true, demoted),
+            () => _admin.DeleteAsync(target, demoted));
+    }
+
+    private static async Task AssertNoPermissionAsync(params Func<Task>[] actions)
+    {
+        foreach (var action in actions)
+        {
+            var ex = await Assert.ThrowsAsync<DomainException>(action);
+            Assert.Equal("Keine Berechtigung.", ex.Message);
+        }
+    }
+
+    [Theory]
+    [InlineData("https://kalender.example.org/", "https://kalender.example.org")]
+    [InlineData("https://kalender.example.org", "https://kalender.example.org")]
+    [InlineData("http://localhost:8080//", "http://localhost:8080")]
+    [InlineData("https://example.org/kalender/", "https://example.org/kalender")]
+    public async Task PublicBaseUrl_WhenConfigured_OverridesRequestBase(string configured, string expectedBase)
+    {
+        var admin = AdminWithPublicBaseUrl(configured);
+
+        var link = await admin.InviteAsync("neu@example.com", "http://evil.example/", Actor);
+
+        Assert.StartsWith($"{expectedBase}/Account/ResetPassword?code=", link);
+        Assert.StartsWith($"{expectedBase}/Account/ResetPassword?code=",
+            await admin.CreateResetLinkAsync(Actor, "http://evil.example/", Actor));
+    }
+
+    [Fact]
+    public async Task PublicBaseUrl_WhenUnset_UsesRequestBase()
+    {
+        var link = await _admin.InviteAsync("neu@example.com", "http://localhost:5000/", Actor);
+
+        Assert.StartsWith("http://localhost:5000/Account/ResetPassword?code=", link);
+    }
+
+    [Theory]
+    [InlineData("kalender.example.org")]
+    [InlineData("ftp://kalender.example.org")]
+    [InlineData("/relativ")]
+    [InlineData("https://kalender.example.org/?x=1")]
+    public void PublicBaseUrl_Invalid_FailsWithClearMessage(string configured)
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => AdminWithPublicBaseUrl(configured));
+
+        Assert.Contains("App:PublicBaseUrl", ex.Message);
+    }
+
+    private UserAdminService AdminWithPublicBaseUrl(string value) => new(
+        _services.GetRequiredService<IServiceScopeFactory>(),
+        new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["App:PublicBaseUrl"] = value }).Build());
 
     [Fact]
     public void IdentityOptions_RequireTenCharactersAndSevenDayTokens()
