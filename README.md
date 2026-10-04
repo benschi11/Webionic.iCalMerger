@@ -9,7 +9,7 @@ Mehrere Nutzer, jeder mit eigenen Kalendern. Neue Nutzer lädt der Admin per Lin
 2. iCal-URLs (`https://…` oder `webcal://…`) als Quellen hinzufügen.
 3. Die angezeigte Feed-URL (`https://<host>/feed/<token>.ics`) in Apple Kalender, Google Kalender oder Outlook abonnieren und an die Familie weitergeben.
 
-Wer die Feed-URL kennt, kann den Kalender lesen. Mit „Neue URL erzeugen“ wird die alte URL ungültig.
+Wer die Feed-URL kennt, kann den Kalender lesen. Mit „Neue Adresse erzeugen“ wird die alte URL ungültig.
 Quellen werden live abgerufen (5 Minuten Cache). Fällt eine Quelle aus, liefert der Feed die übrigen Quellen
 und zeigt bei Bedarf den letzten bekannten Stand der ausgefallenen.
 
@@ -42,8 +42,8 @@ Optionale Einstellungen:
 
 - **Container-Port nur über den Proxy erreichbar machen.** Die App vertraut `X-Forwarded-*` von jedem Absender (`KnownProxies` ist geleert). In Dokploy deshalb keinen Host-Port veröffentlichen und Port 8080 nie direkt ins Netz stellen, sonst kann jeder Client Host, Schema und IP fälschen.
 - **Feed-Tokens sind Geheimnisse im URL-Pfad.** `Logging__LogLevel__Microsoft.AspNetCore` mindestens auf `Warning` lassen (so ist die App konfiguriert) und nicht auf `Information` anheben, sonst landen Feed-URLs im App-Log. Auch die Zugriffslogs von Traefik/Dokploy enthalten die Feed-URL: nicht an andere Systeme weiterleiten oder für `/feed` deaktivieren.
-- **Backups:** SQLite-Datenbank und Schlüssel liegen beide auf dem Volume `/data`. Immer das ganze Volume sichern.
-- **Notfall:** Sind alle Admins ausgesperrt (gesperrt oder Passwort verloren), lässt sich das nur von Hand beheben: die Datenbank `/data/app.db` mit `sqlite3` korrigieren (z. B. `LockoutEnd` leeren oder eine Admin-Rolle zuweisen) oder das Volume zurücksetzen, damit `ADMIN_EMAIL`/`ADMIN_PASSWORD` beim nächsten Start einen neuen Admin anlegen.
+- **Backups:** SQLite-Datenbank und Schlüssel liegen beide auf dem Volume `/data`. Immer das ganze Volume sichern. Die SQLite-Datenbank läuft im WAL-Modus: ein Backup im laufenden Betrieb mit `sqlite3 /data/app.db ".backup ziel.db"` erstellen oder vorher den Container stoppen, nicht einfach die Datei kopieren.
+- **Notfall:** Sind alle Admins ausgesperrt (gesperrt oder Passwort verloren), lässt sich das nur von Hand beheben: die Datenbank `/data/app.db` mit `sqlite3` korrigieren (z. B. `LockoutEnd` leeren oder eine Admin-Rolle zuweisen) oder nur `/data/app.db` (samt `-wal`/`-shm`) löschen, damit `ADMIN_EMAIL`/`ADMIN_PASSWORD` beim nächsten Start einen neuen Admin anlegen. Die Schlüssel in `/data/keys` bleiben dabei erhalten, das ganze Volume muss dafür nicht zurückgesetzt werden.
 - **Letzter Admin:** Der letzte aktive Admin kann nicht gelöscht, gesperrt oder herabgestuft werden. Werden zwei Admins gleichzeitig herabgestuft, kann diese Prüfung theoretisch umgangen werden (Race). Bei Bedarf im Notfall wie oben vorgehen.
 
 ## Nutzerverwaltung
