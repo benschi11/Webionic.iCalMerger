@@ -1,0 +1,34 @@
+<div class="scrim" @onclick="Cancel">
+    <div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="dialog-title" aria-describedby="dialog-text"
+         tabindex="-1" @onclick:stopPropagation="true" @onkeydown="OnKey">
+        <h2 id="dialog-title">@Title</h2>
+        <p id="dialog-text">@ChildContent</p>
+        <div class="btns">
+            <button type="button" class="btn btn-quiet" @ref="cancelButton" @onclick="Cancel" disabled="@Busy">Abbrechen</button>
+            <button type="button" class="btn @(Destructive ? "btn-err" : "btn-navy")" @onclick="Confirm" disabled="@Busy">@ConfirmText</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    private ElementReference cancelButton;
+
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public string ConfirmText { get; set; } = "";
+    [Parameter] public bool Destructive { get; set; } = true;
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter, EditorRequired] public EventCallback OnConfirm { get; set; }
+    [Parameter, EditorRequired] public EventCallback OnCancel { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await cancelButton.FocusAsync();
+    }
+
+    private Task Cancel() => Busy ? Task.CompletedTask : OnCancel.InvokeAsync();
+
+    private Task Confirm() => OnConfirm.InvokeAsync();
+
+    private Task OnKey(KeyboardEventArgs e) => e.Key == "Escape" ? Cancel() : Task.CompletedTask;
+}

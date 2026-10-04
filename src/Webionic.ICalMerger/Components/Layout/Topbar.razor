@@ -1,0 +1,50 @@
+@implements IDisposable
+
+@inject NavigationManager Navigation
+
+<header class="topbar">
+    <a class="topbar-brand" href=""><img src="img/logo-new-light.svg" alt="Webionic" height="30" /></a>
+    <AuthorizeView>
+        <Authorized>
+            <input id="nav-toggle" class="nav-toggle" type="checkbox" aria-label="Menü öffnen oder schließen" />
+            <label for="nav-toggle" class="burger" aria-hidden="true"><Icon Name="menu" /></label>
+            <div class="topbar-menu">
+                <nav aria-label="Hauptnavigation">
+                    <a href="" class="@(OnCalendars ? "active" : null)" aria-current="@(OnCalendars ? "page" : null)">Kalender</a>
+                    <AuthorizeView Roles="Admin" Context="admin">
+                        <a href="admin/users" class="@(OnAdmin ? "active" : null)" aria-current="@(OnAdmin ? "page" : null)">Nutzer</a>
+                    </AuthorizeView>
+                </nav>
+                <div class="who">
+                    <a class="who-name" href="Account/Manage/ChangePassword" title="Passwort ändern">@context.User.Identity?.Name</a>
+                    <form action="Account/Logout" method="post">
+                        <AntiforgeryToken />
+                        <input type="hidden" name="ReturnUrl" value="@currentUrl" />
+                        <button type="submit" class="btn btn-quiet btn-sm">Abmelden</button>
+                    </form>
+                </div>
+            </div>
+        </Authorized>
+    </AuthorizeView>
+</header>
+
+@code {
+    private string currentUrl = "";
+
+    private bool OnCalendars => currentUrl.Length == 0 || currentUrl.StartsWith("calendars/", StringComparison.OrdinalIgnoreCase);
+    private bool OnAdmin => currentUrl.StartsWith("admin/", StringComparison.OrdinalIgnoreCase);
+
+    protected override void OnInitialized()
+    {
+        currentUrl = Navigation.ToBaseRelativePath(Navigation.Uri);
+        Navigation.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        currentUrl = Navigation.ToBaseRelativePath(e.Location);
+        StateHasChanged();
+    }
+
+    public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
+}
