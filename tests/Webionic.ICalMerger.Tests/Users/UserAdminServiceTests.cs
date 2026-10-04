@@ -442,4 +442,40 @@ public sealed class UserAdminServiceTests : IDisposable
 
         Assert.Single(await _admin.ListAsync());
     }
+
+    [Fact]
+    public async Task Bootstrap_WhenRoleCannotBeCreated_FailsInGermanWithoutLeakingPassword()
+    {
+        using var connection = new SqliteConnection("DataSource=:memory:");
+        connection.Open();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddDataProtection();
+        services.AddDbContext<ApplicationDbContext>(o => o.UseSqlite(connection));
+        services.AddAppIdentity();
+        services.AddScoped<IRoleValidator<IdentityRole>, RejectingRoleValidator>();
+        await using var provider = services.BuildServiceProvider();
+        using (var scope = provider.CreateScope())
+        {
+            scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().Database.EnsureCreated();
+        }
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["ADMIN_EMAIL"] = "boss@example.com",
+            ["ADMIN_PASSWORD"] = Password,
+        }).Build();
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => AdminBootstrapper.EnsureAdminAsync(provider, config));
+
+        Assert.Contains("Admin-Rolle", ex.Message);
+        Assert.DoesNotContain(Password, ex.Message);
+        using var check = provider.CreateScope();
+        Assert.Empty(check.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>().Users);
+    }
+
+    private sealed class RejectingRoleValidator : IRoleValidator<IdentityRole>
+    {
+        public Task<IdentityResult> ValidateAsync(RoleManager<IdentityRole> manager, IdentityRole role) =>
+            Task.FromResult(IdentityResult.Failed(new IdentityError { Code = "Rejected", Description = "abgelehnt" }));
+    }
 }

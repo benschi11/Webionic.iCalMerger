@@ -15,7 +15,12 @@ public static class AdminBootstrapper
 
         if (!await roles.RoleExistsAsync(Roles.Admin))
         {
-            await roles.CreateAsync(new IdentityRole(Roles.Admin));
+            var role = await roles.CreateAsync(new IdentityRole(Roles.Admin));
+            if (!role.Succeeded)
+            {
+                throw new InvalidOperationException(
+                    "Die Admin-Rolle konnte nicht angelegt werden: " + string.Join(" ", role.Errors.Select(e => e.Description)));
+            }
         }
 
         if (await users.Users.AnyAsync())
@@ -39,6 +44,13 @@ public static class AdminBootstrapper
                 "Der erste Admin konnte nicht angelegt werden: " + string.Join(" ", created.Errors.Select(e => e.Description)));
         }
 
-        await users.AddToRoleAsync(admin, Roles.Admin);
+        var inRole = await users.AddToRoleAsync(admin, Roles.Admin);
+        if (!inRole.Succeeded)
+        {
+            // Kein halbfertiger Nutzer ohne Admin-Rolle: beim nächsten Start soll die Anlage erneut laufen.
+            await users.DeleteAsync(admin);
+            throw new InvalidOperationException(
+                "Der erste Admin konnte der Admin-Rolle nicht zugewiesen werden: " + string.Join(" ", inRole.Errors.Select(e => e.Description)));
+        }
     }
 }
