@@ -84,6 +84,9 @@ if (!app.Environment.IsDevelopment())
 }
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 
+// Explizit nach den Forwarded Headers, sonst laufen Authentifizierung und Challenge-Weiterleitungen mit dem Proxy-Schema (http).
+app.UseAuthentication();
+app.UseAuthorization();
 app.UseAntiforgery();
 
 app.MapFeedEndpoint();
