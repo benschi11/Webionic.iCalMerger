@@ -161,6 +161,26 @@ public sealed class UserAdminServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task ResetLink_NewLinkInvalidatesOlderOne()
+    {
+        var id = await SeedAsync("alt@example.com", admin: false);
+        var link1 = TokenFromLink(await _admin.CreateResetLinkAsync(id, BaseUri, Actor));
+        var link2 = TokenFromLink(await _admin.CreateResetLinkAsync(id, BaseUri, Actor));
+
+        var results = await WithUsersAsync(async users =>
+        {
+            var user = (await users.FindByIdAsync(id))!;
+            var first = await users.ResetPasswordAsync(user, link1, "erstes langes passwort");
+            var second = await users.ResetPasswordAsync(user, link2, "zweites langes passwort");
+            return (first, second);
+        });
+
+        Assert.False(results.first.Succeeded);
+        Assert.Contains(results.first.Errors, e => e.Code == "InvalidToken");
+        Assert.True(results.second.Succeeded);
+    }
+
+    [Fact]
     public async Task ResetLink_ForUnknownUser_Throws()
     {
         await Assert.ThrowsAsync<DomainException>(() => _admin.CreateResetLinkAsync("gibt-es-nicht", BaseUri, Actor));

@@ -183,6 +183,8 @@ public sealed class UserAdminService
 
     private async Task<string> BuildLinkAsync(UserManager<ApplicationUser> users, ApplicationUser user, string baseUri)
     {
+        // Neuer Stempel vor dem Token: Ältere Links verlieren damit ihre Gültigkeit.
+        Check(await users.UpdateSecurityStampAsync(user));
         var token = await users.GeneratePasswordResetTokenAsync(user);
         var code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
         return $"{(publicBaseUrl ?? baseUri.TrimEnd('/'))}/Account/ResetPassword?code={code}";
