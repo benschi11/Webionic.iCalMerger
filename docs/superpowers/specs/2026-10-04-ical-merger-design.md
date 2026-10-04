@@ -106,6 +106,8 @@ geloggt und in der UI standardmäßig gekürzt angezeigt (Host + Anfang).
   Neustart ist der Cache leer.
 - Gleichzeitige Abrufe derselben URL werden zusammengefasst (ein Abruf pro URL
   gleichzeitig).
+- Nach einem fehlgeschlagenen Abruf wird dieselbe URL 1 Minute lang nicht erneut
+  abgerufen (Backoff), damit eine ausgefallene Quelle Feed-Abrufe nicht ausbremst.
 - Der Status (`LastAttemptAt`, `LastSuccessAt`, `LastError`) wird nach jedem
   Abruf in `CalendarSource` aktualisiert und in der UI angezeigt.
 
@@ -133,13 +135,15 @@ geloggt und in der UI standardmäßig gekürzt angezeigt (Host + Anfang).
   Passwort), Einladungslink erzeugen, Passwort-Reset-Link erzeugen, Nutzer
   sperren/entsperren (Lockout), Nutzer löschen (mit Bestätigung), Admin-Rolle
   vergeben oder entziehen.
-- Link: `/Account/SetPassword?userId=…&token=…`, aus
-  `GeneratePasswordResetTokenAsync`. Der Admin sieht den Link einmal und
+- Link: `/Account/ResetPassword?code=…` (Vorlagenseite von Identity, `code` ist das
+  Base64Url-kodierte Token aus `GeneratePasswordResetTokenAsync`). Der Nutzer gibt
+  zur Bestätigung seine E-Mail-Adresse ein und wählt ein Passwort (mindestens 10 Zeichen). Der Admin sieht den Link einmal und
   kopiert ihn. Gültigkeit 7 Tage (`DataProtectionTokenProviderOptions`).
   Ein Token ist nach Benutzung ungültig, weil sich der Security-Stamp ändert.
 - Schutz vor Aussperren: Der letzte Admin kann sich weder löschen noch sperren
   noch die Rolle entziehen. Ein Admin kann sich nicht selbst löschen.
-- Eingeloggte Nutzer können ihr Passwort ändern (Identity-Standardseite).
+- Eingeloggte Nutzer können ihr Passwort ändern (`/Account/Manage/ChangePassword`).
+- Nach 5 falschen Anmeldeversuchen wird das Konto 15 Minuten gesperrt (Identity-Lockout).
 - Autorisierung: Jede Abfrage und Mutation von Kalendern/Quellen filtert auf
   `OwnerId == aktueller Nutzer`. Fremde IDs ergeben „nicht gefunden“.
 
@@ -172,7 +176,7 @@ geloggt und in der UI standardmäßig gekürzt angezeigt (Host + Anfang).
 - Mehrstufiges `Dockerfile` (SDK-Build, ASP.NET-Runtime), läuft als Nicht-Root.
 - Volume `/data` mit SQLite-Datei und Data-Protection-Keys (Logins und
   Reset-Links überleben Neustarts).
-- Konfiguration über Umgebungsvariablen: `ConnectionStrings__Default`
+- Konfiguration über Umgebungsvariablen: `ConnectionStrings__DefaultConnection`
   (Default `Data Source=/data/app.db`), `ADMIN_EMAIL`, `ADMIN_PASSWORD`,
   optional die Limits.
 - Migrationen laufen beim Start automatisch.
