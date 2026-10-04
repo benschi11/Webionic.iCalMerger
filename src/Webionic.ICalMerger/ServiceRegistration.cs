@@ -1,3 +1,4 @@
+using Webionic.ICalMerger.Calendars;
 using Webionic.ICalMerger.Fetching;
 
 namespace Webionic.ICalMerger;
@@ -16,6 +17,9 @@ public static class ServiceRegistration
             client.DefaultRequestHeaders.Accept.ParseAdd("text/calendar");
             return new SafeHttpFetcher(client);
         });
+
+        services.Configure<AppLimits>(configuration.GetSection("Limits"));
+        services.AddScoped<CalendarService>();
 
         return services;
     }
