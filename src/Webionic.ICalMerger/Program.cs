@@ -8,6 +8,7 @@ using Webionic.ICalMerger;
 using Webionic.ICalMerger.Components;
 using Webionic.ICalMerger.Components.Account;
 using Webionic.ICalMerger.Data;
+using Webionic.ICalMerger.Feed;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -94,6 +95,7 @@ app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages:
 
 app.UseAntiforgery();
 
+app.MapFeedEndpoint();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
