@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Webionic.ICalMerger;
 using Webionic.ICalMerger.Components;
 using Webionic.ICalMerger.Components.Account;
 using Webionic.ICalMerger.Data;
@@ -64,6 +65,8 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.KnownIPNetworks.Clear();
     options.KnownProxies.Clear();
 });
+
+builder.Services.AddCalendarServices(builder.Configuration);
 
 var app = builder.Build();
 
