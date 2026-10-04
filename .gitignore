@@ -61,7 +61,9 @@ nunit-*.xml
 .superpowers/
 
 # App data
-data/
+# Lokales Datenverzeichnis (Datenbanken sind über *.db* erfasst). Bewusst nicht das ganze Verzeichnis:
+# auf case-insensitiven Dateisystemen würde das auch src/Webionic.ICalMerger/Data/ (Quellcode) treffen.
+/src/Webionic.ICalMerger/data/keys/
 *.db
 *.db-shm
 *.db-wal
