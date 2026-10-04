@@ -199,4 +199,39 @@ public class SafeHttpFetcherTests
         Assert.DoesNotContain(url, ex.Message);
         Assert.DoesNotContain("127.0.0.1", ex.Message);
     }
+
+    [Fact]
+    public async Task Fetch_BlockedHost_ExceptionLeaksNoInnerExceptionOrHost()
+    {
+        var ex = await Assert.ThrowsAsync<FetchException>(() =>
+            Create(allowLoopback: false).FetchAsync("http://localhost:4711/secretpath.ics", CancellationToken.None));
+
+        AssertNoLeak(ex);
+    }
+
+    [Fact]
+    public async Task Fetch_ConnectFailure_ExceptionLeaksNoInnerExceptionOrHost()
+    {
+        int port;
+        using (var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0))
+        {
+            listener.Start();
+            port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+        }
+
+        var ex = await Assert.ThrowsAsync<FetchException>(() =>
+            Create().FetchAsync($"http://127.0.0.1:{port}/secretpath.ics", CancellationToken.None));
+
+        AssertNoLeak(ex, port.ToString());
+    }
+
+    private static void AssertNoLeak(FetchException ex, params string[] extra)
+    {
+        Assert.Null(ex.InnerException);
+        foreach (var needle in new[] { "localhost", "127.0.0.1", "secretpath" }.Concat(extra))
+        {
+            Assert.DoesNotContain(needle, ex.Message);
+            Assert.DoesNotContain(needle, ex.ToString());
+        }
+    }
 }

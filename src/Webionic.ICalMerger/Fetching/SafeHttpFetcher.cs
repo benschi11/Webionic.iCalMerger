@@ -2,7 +2,6 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 
-
 namespace Webionic.ICalMerger.Fetching;
 
 public interface ICalendarFetcher
@@ -117,12 +116,13 @@ public sealed class SafeHttpFetcher(HttpClient client, FetcherOptions? options =
                 ex.GetBaseException() is BlockedAddressException
                     ? "Adresse nicht erlaubt (interne Netzwerke sind gesperrt)"
                     : "Quelle nicht erreichbar",
-                ex);
+                null);
         }
         catch (Exception ex) when (ex is not (FetchException or OperationCanceledException))
         {
+            // Inner-Exceptions werden bewusst verworfen: HttpClient-Meldungen enthalten Host und Port der Quelle.
             // IOException, InvalidDataException, SocketException, Dekodierfehler usw.: Meldung ohne URL.
-            throw new FetchException("Antwort konnte nicht gelesen werden", ex);
+            throw new FetchException("Antwort konnte nicht gelesen werden");
         }
     }
 
