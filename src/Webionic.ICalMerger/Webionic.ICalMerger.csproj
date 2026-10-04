@@ -28,10 +28,35 @@
     <None Remove="tools/**" />
   </ItemGroup>
 
+  <!-- SHA256 der Release-Assets von v4.3.3 (sha256sums.txt des GitHub-Releases). Bei neuer Version alle Werte ersetzen. -->
+  <PropertyGroup>
+    <TailwindSha256 Condition="'$(TailwindAsset)' == 'tailwindcss-linux-x64'">dc61b3ac6b8c9ca874c0cc4c57b2409791a64c5540404ca5f5367360babc313a</TailwindSha256>
+    <TailwindSha256 Condition="'$(TailwindAsset)' == 'tailwindcss-linux-x64-musl'">a04d34ceacc8f52cbe8920ad846cdeb61d3d0021dba32db0d1f77c9d9fad7a6c</TailwindSha256>
+    <TailwindSha256 Condition="'$(TailwindAsset)' == 'tailwindcss-linux-arm64'">55fd0b241214eff3de1e8ee4f22796662f2d2e7a49bcfca7477cfd0bac398195</TailwindSha256>
+    <TailwindSha256 Condition="'$(TailwindAsset)' == 'tailwindcss-linux-arm64-musl'">71ea4be79c9de9827545682df3e040053fb535d37c71ed2cfdedf9385a0868e0</TailwindSha256>
+    <TailwindSha256 Condition="'$(TailwindAsset)' == 'tailwindcss-macos-x64'">7922e0953f2110c05976e3bf58f14e643d90427575e766b7d433f5f80cbee7e1</TailwindSha256>
+    <TailwindSha256 Condition="'$(TailwindAsset)' == 'tailwindcss-macos-arm64'">cdf646702987a743464dff4d9c60fd4480d1c1e73dd819a9a67f1078815dce9d</TailwindSha256>
+    <TailwindSha256 Condition="'$(TailwindAsset)' == 'tailwindcss-windows-x64.exe'">e0e260ce048014e9268f6237ff18f8ccf02cef521cbd0ae04e82c2cdf7aa3955</TailwindSha256>
+    <TailwindTemp>$(TailwindDir)$(TailwindVersion)-$(TailwindAsset).download</TailwindTemp>
+  </PropertyGroup>
+
+  <!-- Der Download landet zuerst in einer Temp-Datei. Erst nach erfolgreicher Hash-Prüfung wird er an den Zielpfad verschoben,
+       eine beschädigte Datei liegt nie am endgültigen Pfad. Hash-Abweichung ist ein Fehler, ein Netzwerkfehler nur eine Warnung. -->
   <Target Name="TailwindDownload" Condition="'$(SkipTailwind)' != 'true' And !Exists('$(TailwindExe)')">
+    <Delete Files="$(TailwindTemp)" />
     <DownloadFile SourceUrl="https://github.com/tailwindlabs/tailwindcss/releases/download/v$(TailwindVersion)/$(TailwindAsset)"
-                  DestinationFolder="$(TailwindDir)" DestinationFileName="$(TailwindVersion)-$(TailwindAsset)"
+                  DestinationFolder="$(TailwindDir)" DestinationFileName="$(TailwindVersion)-$(TailwindAsset).download"
                   Retries="3" ContinueOnError="WarnAndContinue" />
+    <GetFileHash Condition="Exists('$(TailwindTemp)')" Files="$(TailwindTemp)" Algorithm="SHA256" HashEncoding="hex">
+      <Output TaskParameter="Items" ItemName="TailwindDownloadHash" />
+    </GetFileHash>
+    <PropertyGroup Condition="Exists('$(TailwindTemp)')">
+      <TailwindActualHash>%(TailwindDownloadHash.FileHash)</TailwindActualHash>
+    </PropertyGroup>
+    <Delete Condition="Exists('$(TailwindTemp)') And '$([System.String]::Copy($(TailwindActualHash)).ToLowerInvariant())' != '$(TailwindSha256)'" Files="$(TailwindTemp)" />
+    <Error Condition="'$(TailwindActualHash)' != '' And '$([System.String]::Copy($(TailwindActualHash)).ToLowerInvariant())' != '$(TailwindSha256)'"
+           Text="SHA256 der Tailwind-CLI $(TailwindAsset) stimmt nicht überein (erwartet $(TailwindSha256), erhalten $(TailwindActualHash)). Die Datei wurde verworfen." />
+    <Move Condition="Exists('$(TailwindTemp)')" SourceFiles="$(TailwindTemp)" DestinationFiles="$(TailwindExe)" />
     <Exec Condition="Exists('$(TailwindExe)') And !$([MSBuild]::IsOSPlatform('Windows'))" Command="chmod +x &quot;$(TailwindExe)&quot;" />
   </Target>
 
